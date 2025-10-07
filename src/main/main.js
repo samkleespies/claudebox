@@ -31,12 +31,12 @@ function buildSessionMetadata(type) {
   }
 
   const command = type === 'claude' ? CLAUDE_COMMAND : CODEX_COMMAND;
-  const labelBase = type === 'claude' ? 'Claude' : 'Codex';
+  const labelBase = type === 'claude' ? 'Claude Code' : 'Codex';
   const typeCount = (sessionCounterByType.get(type) ?? 0) + 1;
   sessionCounterByType.set(type, typeCount);
 
   const id = `session-${Date.now()}-${++sessionCounter}`;
-  const title = `${labelBase} [${typeCount}]`;
+  const title = `${labelBase} · ${typeCount}`;
 
   return { id, type, title, command };
 }
@@ -262,9 +262,17 @@ function registerIpcHandlers() {
       return;
     }
 
+    const sessionType = session.type;
     terminateSession(session);
     sessions.delete(id);
     log(`session ${id} disposed`);
+
+    // Reset counter if no more sessions of this type exist
+    const hasRemainingOfType = Array.from(sessions.values()).some(s => s.type === sessionType);
+    if (!hasRemainingOfType) {
+      sessionCounterByType.set(sessionType, 0);
+      log(`reset ${sessionType} counter to 0`);
+    }
   });
 
   // Window control handlers

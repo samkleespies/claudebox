@@ -18,7 +18,7 @@ function createMockAPI() {
       const session = {
         id,
         type,
-        title: `${type === 'claude' ? 'Claude' : 'Codex'} Session ${sessionCounter}`,
+        title: `${type === 'claude' ? 'Claude Code' : 'Codex'} · ${sessionCounter}`,
         status: 'running',
         command: type === 'claude' ? 'claude --dangerously-skip-permissions' : 'codex --dangerously-bypass-approvals-and-sandbox',
         createdAt: new Date().toISOString(),
@@ -206,7 +206,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
   terminal.open(elements.terminalHostEl);
-  terminal.focus();
+  terminal.blur(); // Don't focus terminal until a session starts
   window.requestAnimationFrame(() => fitAddon.fit());
 
   // Debug mode toggle (Ctrl+Shift+D)
@@ -264,8 +264,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   function updateEmptyState() {
     if (state.activeSessionId) {
       elements.emptyStateEl.classList.add('hidden');
+      elements.terminalHostEl.classList.remove('no-session');
     } else {
       elements.emptyStateEl.classList.remove('hidden');
+      elements.terminalHostEl.classList.add('no-session');
     }
   }
 
@@ -295,15 +297,29 @@ window.addEventListener('DOMContentLoaded', async () => {
       const meta = document.createElement('div');
       meta.className = 'session-item__meta';
 
+      // Create title wrapper with icon
+      const titleWrapper = document.createElement('div');
+      titleWrapper.className = 'session-item__title-wrapper';
+
+      const icon = document.createElement('img');
+      icon.className = 'session-item__icon';
+      icon.src = session.type === 'claude'
+        ? './assets/images/claude-icon.svg'
+        : './assets/images/gpt-icon.svg';
+      icon.alt = `${session.type} icon`;
+
       const title = document.createElement('p');
       title.className = 'session-item__title';
       title.textContent = session.title;
+
+      titleWrapper.appendChild(icon);
+      titleWrapper.appendChild(title);
 
       const path = document.createElement('p');
       path.className = 'session-item__path';
       path.textContent = session.cwd || '';
 
-      meta.appendChild(title);
+      meta.appendChild(titleWrapper);
       meta.appendChild(path);
 
       const statusColumn = document.createElement('div');
@@ -438,6 +454,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         setActiveSession(state.activeSessionId);
       } else {
         terminal.reset();
+        terminal.blur(); // Remove cursor when no sessions
         updateWorkspaceHeader();
         updateEmptyState();
       }
@@ -473,6 +490,14 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     write(activeId, data);
+  });
+
+  // Prevent terminal from being focused when there's no active session
+  elements.terminalHostEl.addEventListener('mousedown', (e) => {
+    if (!state.activeSessionId) {
+      e.preventDefault();
+      terminal.blur();
+    }
   });
 
   elements.newClaudeButton.addEventListener('click', () => handleCreateSession('claude'));
