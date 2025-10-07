@@ -132,17 +132,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     sessionListEl: document.getElementById('sessionList'),
     newClaudeButton: document.getElementById('newClaude'),
     newCodexButton: document.getElementById('newCodex'),
-    terminateButton: document.getElementById('terminateSession'),
-    removeButton: document.getElementById('removeSession'),
     sessionTitleEl: document.getElementById('sessionTitle'),
-    sessionSubtitleEl: document.getElementById('sessionSubtitle'),
     terminalHostEl: document.getElementById('terminal'),
     emptyStateEl: document.getElementById('emptyState'),
   };
 
-  // Check only required elements (statusBar is optional)
-  const requiredElements = Object.entries(elements).filter(([key]) => key !== 'statusBarEl');
-  if (!requiredElements.every(([, el]) => Boolean(el))) {
+  if (!Object.values(elements).every(Boolean)) {
     renderFatalError('Renderer UI failed to load expected elements.');
     return;
   }
@@ -235,8 +230,21 @@ window.addEventListener('DOMContentLoaded', async () => {
         status.classList.add('session-item__status--exited');
       }
 
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'session-item__delete';
+      deleteBtn.innerHTML = '🗑️';
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (session.status === 'running') {
+          await terminate(session.id);
+        }
+        await dispose(session.id);
+        removeSessionFromState(session.id);
+      });
+
       li.appendChild(meta);
       li.appendChild(status);
+      li.appendChild(deleteBtn);
 
       li.addEventListener('click', () => {
         if (session.id !== state.activeSessionId) {
@@ -253,17 +261,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     if (!active) {
       elements.sessionTitleEl.textContent = 'No session selected';
-      elements.sessionSubtitleEl.textContent = 'Create a session to get started.';
-      elements.terminateButton.disabled = true;
-      elements.removeButton.disabled = true;
       return;
     }
 
     elements.sessionTitleEl.textContent = active.title;
-    const statusFragment = active.status === 'running' ? 'Live' : active.status === 'exited' ? 'Exited' : 'Stopping';
-    elements.sessionSubtitleEl.textContent = `${active.type === 'claude' ? 'Claude Code' : 'Codex'} - ${statusFragment} - ${active.command}`;
-    elements.terminateButton.disabled = active.status !== 'running';
-    elements.removeButton.disabled = false;
   }
 
   function appendToSessionBuffer(id, data) {
@@ -353,51 +354,19 @@ window.addEventListener('DOMContentLoaded', async () => {
   async function handleCreateSession(type) {
     console.log('[renderer] creating session', type);
     setActionButtonsDisabled(true);
-    setStatusBar(`Starting ${type === 'claude' ? 'Claude' : 'Codex'} session...`);
 
     try {
       const session = await createSession(type);
       addSession(session);
-      appendToSessionBuffer(session.id, `${SYSTEM_PREFIX}${session.title} launching via \"${session.command}\"\r\n`);
     } catch (error) {
       console.error('[renderer] Failed to create session', error);
       const message = error?.message ?? 'Unknown error';
-      setStatusBar(`Failed to start session: ${message}`, true);
       alert(`Could not start the session. ${message}`);
     } finally {
       setActionButtonsDisabled(false);
     }
   }
 
-  async function handleTerminateSession() {
-    const active = state.activeSessionId ? findSession(state.activeSessionId) : null;
-    if (!active || active.status !== 'running') {
-      return;
-    }
-
-    appendToSessionBuffer(active.id, `${SYSTEM_PREFIX}Requesting termination...\r\n`);
-    setStatusBar(`Terminating ${active.title}...`);
-    await terminate(active.id);
-  }
-
-  async function handleRemoveSession() {
-    const active = state.activeSessionId ? findSession(state.activeSessionId) : null;
-    if (!active) {
-      return;
-    }
-
-    if (active.status === 'running') {
-      const confirmRemove = confirm(`${active.title} is still running. Terminate and remove?`);
-      if (!confirmRemove) {
-        return;
-      }
-      await terminate(active.id);
-    }
-
-    await dispose(active.id);
-    removeSessionFromState(active.id);
-    setStatusBar(`${active.title} removed.`);
-  }
 
   const resizeObserver = new ResizeObserver(() => fitAndNotify());
   resizeObserver.observe(elements.terminalHostEl);
@@ -413,8 +382,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   elements.newClaudeButton.addEventListener('click', () => handleCreateSession('claude'));
   elements.newCodexButton.addEventListener('click', () => handleCreateSession('codex'));
-  elements.terminateButton.addEventListener('click', handleTerminateSession);
-  elements.removeButton.addEventListener('click', handleRemoveSession);
 
   disposerFns.push(onSessionData(({ id, data }) => {
     appendToSessionBuffer(id, data);
@@ -426,10 +393,6 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    session.status = 'exited';
-    session.exitCode = typeof exitCode === 'number' ? exitCode : null;
-    const message = `${SYSTEM_PREFIX}${session.title} exited${session.exitCode != null ? ` (code ${session.exitCode})` : ''}.\r\n`;
-    appendToSessionBuffer(id, message);
     renderSessionList();
     updateWorkspaceHeader();
 

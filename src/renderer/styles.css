@@ -78,19 +78,18 @@ body {
 }
 
 .sidebar__actions {
-  display: grid;
+  display: flex;
   gap: 10px;
 }
 
 .sidebar__action {
-  padding: 10px 16px;
-  border-radius: 10px;
+  padding: 10px 10px;
+  border-radius: 18px;
   border: none;
-  font-size: 0.95rem;
-  font-weight: 600;
   cursor: pointer;
-  color: white;
   transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+  max-width: 85px;
+  margin: 0 auto;
 }
 
 .sidebar__action:disabled {
@@ -99,18 +98,24 @@ body {
 }
 
 .sidebar__action--claude {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  box-shadow: 0 12px 24px rgba(124, 58, 237, 0.25);
+  background: rgb(0, 0, 0);
+  /* box-shadow: 0 12px 24px rgba(124, 58, 237, 0.25); */
 }
 
 .sidebar__action--codex {
   background: linear-gradient(135deg, #0ea5e9, #2563eb);
-  box-shadow: 0 12px 24px rgba(14, 165, 233, 0.25);
+  /* box-shadow: 0 12px 24px rgba(14, 165, 233, 0.25); */
 }
 
 .sidebar__action:not(:disabled):hover {
   transform: translateY(-1px);
   box-shadow: 0 16px 28px rgba(15, 23, 42, 0.42);
+}
+
+.button-icon {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .sidebar__list-header {
@@ -199,6 +204,21 @@ body {
 .session-item__status--exited {
   background: rgba(239, 68, 68, 0.15);
   color: #fca5a5;
+}
+
+.session-item__delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px 8px;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.session-item__delete:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 .workspace {

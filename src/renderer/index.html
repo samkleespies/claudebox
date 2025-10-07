@@ -13,12 +13,15 @@
         <div class="sidebar__branding">
           <div class="sidebar__title">
             <h1>ClaudeBox</h1>
-            <p>Manage Claude & Codex sessions</p>
           </div>
         </div>
         <div class="sidebar__actions">
-          <button id="newClaude" class="sidebar__action sidebar__action--claude">New Claude Session</button>
-          <button id="newCodex" class="sidebar__action sidebar__action--codex">New Codex Session</button>
+          <button id="newClaude" class="sidebar__action sidebar__action--claude">
+            <img src="./assets/images/claudecode-icon.svg" alt="Claude" class="button-icon"/>
+          </button>
+          <button id="newCodex" class="sidebar__action sidebar__action--codex">
+            <img src="./assets/images/codex-icon.svg" alt="Codex" class="button-icon"/>
+          </button>
         </div>
         <div class="sidebar__list-header">Sessions</div>
         <ul id="sessionList" class="session-list"></ul>
@@ -27,19 +30,11 @@
         <header class="workspace__header">
           <div>
             <h2 id="sessionTitle">No session selected</h2>
-            <p id="sessionSubtitle" class="workspace__subtitle">Create a session to get started.</p>
-          </div>
-          <div class="workspace__controls">
-            <button id="terminateSession" class="control-button" disabled>Terminate Session</button>
-            <button id="removeSession" class="control-button control-button--secondary" disabled>Remove Session</button>
           </div>
         </header>
         <section class="workspace__terminal">
           <div id="terminal" class="terminal-host"></div>
-          <div id="emptyState" class="terminal-empty">
-            <h3>Spin up a Claude or Codex run</h3>
-            <p>Sessions appear here with a live terminal view. Use the buttons on the left to start one.</p>
-          </div>
+          <div id="emptyState" class="terminal-empty"></div>
         </section>
       </main>
     </div>
