@@ -20,9 +20,13 @@
     "node-pty": "^1.0.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^4.0.1",
     "patch-package": "^8.0.1",
     "vite": "^7.1.9"
+  },
+  "optionalDependencies": {
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1"
   }
 }

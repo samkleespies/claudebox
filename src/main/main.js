@@ -1,9 +1,15 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
 const path = require('path');
 
 // Force node-pty to use winpty instead of conpty (conpty.node was not built)
 process.env.FORCE_WINPTY = '1';
-const pty = require('node-pty');
+// Try prebuilt version first, fall back to regular node-pty
+let pty;
+try {
+  pty = require('@homebridge/node-pty-prebuilt-multiarch');
+} catch {
+  pty = require('node-pty');
+}
 
 const sessions = new Map();
 let sessionCounter = 0;
@@ -42,17 +48,22 @@ function spawnShell(command, cols, rows) {
     ? 'powershell.exe'
     : env.SHELL || '/bin/bash';
 
+  // For Windows, prepend environment variable setting to the command
   const args = process.platform === 'win32'
-    ? ['-NoExit', '-Command', command]
+    ? ['-NoExit', '-Command', `$env:TERM='xterm-256color'; $env:COLORTERM='truecolor'; ${command}`]
     : ['-l', '-c', command];
 
   return pty.spawn(shell, args, {
-    name: 'xterm-color',
+    name: 'xterm-256color',
     cols,
     rows,
     cwd,
-    env,
-    useConpty: false,  // Force winpty (conpty.node was not built)
+    env: {
+      ...env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+    },
+    useConpty: false,
   });
 }
 
@@ -81,12 +92,20 @@ function registerDiagnostics(mainWindow) {
 }
 
 function createWindow() {
+  // Use absolute path from project root for the icon
+  const iconPath = process.env.ELECTRON_RENDERER_URL
+    ? path.join(__dirname, '../../src/renderer/assets/images/app-icon.ico')
+    : path.join(__dirname, '../renderer/assets/images/app-icon.ico');
+
+  const icon = nativeImage.createFromPath(iconPath);
+
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 900,
     minHeight: 600,
     title: 'ClaudeBox',
+    icon: icon,
     autoHideMenuBar: true,  // Hide the menu bar
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),

@@ -145,18 +145,40 @@ window.addEventListener('DOMContentLoaded', async () => {
   const terminal = new Terminal({
     allowProposedApi: true,
     convertEol: true,
+    drawBoldTextInBrightColors: true,
     theme: {
-      background: '#0b1220',
-      foreground: '#f9fbff',
-      cursor: '#38bdf8',
-      selection: 'rgba(56,189,248,0.25)',
+      background: '#0d0d0d',
+      foreground: '#e8e8e8',
+      cursor: '#ff6b35',
+      cursorAccent: '#0d0d0d',
+      selectionBackground: 'rgba(255, 107, 53, 0.3)',
+      black: '#000000',
+      red: '#ff6b6b',
+      green: '#51cf66',
+      yellow: '#ffd93d',
+      blue: '#74c0fc',
+      magenta: '#da77f2',
+      cyan: '#11A8CD',
+      white: '#E5E5E5',
+      brightBlack: '#666666',
+      brightRed: '#F14C4C',
+      brightGreen: '#23D18B',
+      brightYellow: '#F5F543',
+      brightBlue: '#3B8EEA',
+      brightMagenta: '#D670D6',
+      brightCyan: '#29B8DB',
+      brightWhite: '#E5E5E5',
     },
     fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
     fontSize: 13,
-    lineHeight: 1.35,
-    cursorStyle: 'underline',
+    lineHeight: 1,
+    cursorStyle: 'bar',
     cursorBlink: true,
     scrollback: 5000,
+    smoothScrollDuration: 50,
+    minimumContrastRatio: 4.5,
+    fontWeight: 300,
+    fontWeightBold: 600,
   });
 
   const fitAddon = new FitAddon();
@@ -165,9 +187,48 @@ window.addEventListener('DOMContentLoaded', async () => {
   terminal.focus();
   window.requestAnimationFrame(() => fitAddon.fit());
 
+  // Debug mode toggle (Ctrl+Shift+D)
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+      document.body.classList.toggle('debug-mode');
+      const isDebug = document.body.classList.contains('debug-mode');
+      console.log(`Debug mode: ${isDebug ? 'ON' : 'OFF'}`);
+
+      if (isDebug) {
+        const terminalHost = elements.terminalHostEl;
+        const viewport = terminalHost.querySelector('.xterm-viewport');
+        const screen = terminalHost.querySelector('.xterm-screen');
+
+        console.log('=== TERMINAL LAYOUT DIAGNOSTICS ===');
+        console.log('terminal-host:', {
+          offsetWidth: terminalHost.offsetWidth,
+          clientWidth: terminalHost.clientWidth,
+          scrollWidth: terminalHost.scrollWidth
+        });
+
+        if (viewport) {
+          console.log('xterm-viewport:', {
+            offsetWidth: viewport.offsetWidth,
+            clientWidth: viewport.clientWidth,
+            scrollWidth: viewport.scrollWidth
+          });
+        }
+
+        if (screen) {
+          console.log('xterm-screen:', {
+            offsetWidth: screen.offsetWidth,
+            clientWidth: screen.clientWidth,
+            scrollWidth: screen.scrollWidth
+          });
+        }
+      }
+    }
+  });
+
   const state = {
     sessions: [],
     activeSessionId: null,
+    debugStartTime: Date.now(),
   };
 
   const disposerFns = [];
@@ -384,6 +445,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   elements.newCodexButton.addEventListener('click', () => handleCreateSession('codex'));
 
   disposerFns.push(onSessionData(({ id, data }) => {
+    // Debug: log all data for the first 30 seconds with hex dump
+    if (Date.now() - state.debugStartTime < 30000) {
+      const visible = data.replace(/\x1b/g, '\\x1b');
+      const hex = Array.from(data).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+
+      // Always log if contains "bypass" or "Claude Code"
+      if (visible.includes('bypass') || visible.includes('Claude Code') || visible.includes('▐▛███▜▌')) {
+        console.log('[DATA-HEX]', hex.substring(0, 300));
+        console.log('[DATA-STR]', visible.substring(0, 200));
+      }
+    }
     appendToSessionBuffer(id, data);
   }));
 
