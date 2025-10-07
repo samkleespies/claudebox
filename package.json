@@ -1,0 +1,28 @@
+{
+  "name": "claudebox",
+  "version": "1.0.0",
+  "main": "out/main/main.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "lint": "echo \"No lint configured\"",
+    "postinstall": "patch-package"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "Desktop UI for running Claude Code and Codex sessions.",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "electron": "^38.2.1",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "electron-rebuild": "^3.2.9",
+    "electron-vite": "^4.0.1",
+    "patch-package": "^8.0.1",
+    "vite": "^7.1.9"
+  }
+}
