@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
 
 contextBridge.exposeInMainWorld('claudebox', {
-  createSession: (type) => invoke('session:create', { type }),
+  createSession: (type, cwd) => invoke('session:create', { type, cwd }),
   listSessions: () => invoke('session:list'),
   write: (id, data) => invoke('session:write', { id, data }),
   resize: (id, cols, rows) => invoke('session:resize', { id, cols, rows }),
@@ -22,5 +22,7 @@ contextBridge.exposeInMainWorld('claudebox', {
   // Window controls
   windowMinimize: () => invoke('window:minimize'),
   windowMaximize: () => invoke('window:maximize'),
-  windowClose: () => invoke('window:close')
+  windowClose: () => invoke('window:close'),
+  // Directory selection
+  selectDirectory: () => invoke('dialog:selectDirectory')
 });

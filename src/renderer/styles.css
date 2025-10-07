@@ -97,6 +97,12 @@ select,
 }
 
 .sidebar__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar__actions > div:first-child {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
@@ -172,6 +178,72 @@ select,
 .sidebar__action--codex .button-icon {
   width: 16px;
   height: 16px;
+}
+
+.sidebar__dir-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sidebar__dir-input-group {
+  display: flex;
+  gap: 6px;
+}
+
+.sidebar__dir-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.sidebar__dir-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  outline: none;
+}
+
+.sidebar__dir-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.sidebar__dir-input:focus {
+  border-color: rgba(255, 107, 53, 0.5);
+  background: #1f1f1f;
+}
+
+.sidebar__dir-browse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.sidebar__dir-browse:hover {
+  border-color: rgba(255, 107, 53, 0.5);
+  background: #1f1f1f;
+  color: var(--text-primary);
+}
+
+.sidebar__dir-browse:active {
+  transform: translateY(1px);
 }
 
 .sidebar__list-header {

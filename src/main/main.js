@@ -41,9 +41,9 @@ function buildSessionMetadata(type) {
   return { id, type, title, command };
 }
 
-function spawnShell(command, cols, rows) {
+function spawnShell(command, cols, rows, cwd) {
   const env = { ...process.env };
-  const cwd = process.cwd();
+  const workingDir = cwd || process.cwd();
   const shell = process.platform === 'win32'
     ? 'powershell.exe'
     : env.SHELL || '/bin/bash';
@@ -57,7 +57,7 @@ function spawnShell(command, cols, rows) {
     name: 'xterm-256color',
     cols,
     rows,
-    cwd,
+    cwd: workingDir,
     env: {
       ...env,
       TERM: 'xterm-256color',
@@ -164,20 +164,20 @@ function terminateAllSessions() {
 }
 
 function registerIpcHandlers() {
-  ipcMain.handle('session:create', (_event, { type }) => {
+  ipcMain.handle('session:create', (_event, { type, cwd }) => {
     log(`session:create requested (${type})`);
 
     try {
       const initialSize = { cols: 100, rows: 30 };
       const meta = buildSessionMetadata(type);
-      const cwd = process.cwd();
-      const ptyProcess = spawnShell(meta.command, initialSize.cols, initialSize.rows);
+      const sessionCwd = cwd || process.cwd();
+      const ptyProcess = spawnShell(meta.command, initialSize.cols, initialSize.rows, sessionCwd);
 
       const session = {
         ...meta,
         status: 'running',
         createdAt: new Date().toISOString(),
-        cwd,
+        cwd: sessionCwd,
         pty: ptyProcess,
         exitCode: null,
       };
@@ -299,6 +299,24 @@ function registerIpcHandlers() {
     if (win) {
       win.close();
     }
+  });
+
+  // Directory selection dialog
+  ipcMain.handle('dialog:selectDirectory', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return null;
+    }
+
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory']
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    return result.filePaths[0];
   });
 }
 

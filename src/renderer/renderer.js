@@ -13,7 +13,7 @@ function createMockAPI() {
   let sessionCounter = 0;
 
   return {
-    createSession: async (type) => {
+    createSession: async (type, cwd) => {
       const id = `mock-session-${++sessionCounter}`;
       const session = {
         id,
@@ -22,7 +22,7 @@ function createMockAPI() {
         status: 'running',
         command: type === 'claude' ? 'claude --dangerously-skip-permissions' : 'codex --dangerously-bypass-approvals-and-sandbox',
         createdAt: new Date().toISOString(),
-        cwd: '/mock/path'
+        cwd: cwd || '/mock/path'
       };
       mockSessions.set(id, session);
 
@@ -70,7 +70,12 @@ function createMockAPI() {
     // Mock window controls
     windowMinimize: () => console.log('[mock] minimize'),
     windowMaximize: () => console.log('[mock] maximize'),
-    windowClose: () => console.log('[mock] close')
+    windowClose: () => console.log('[mock] close'),
+    // Mock directory selection
+    selectDirectory: async () => {
+      const path = prompt('Enter directory path (mock mode):');
+      return path || null;
+    }
   };
 }
 
@@ -134,6 +139,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     windowMinimize,
     windowMaximize,
     windowClose,
+    selectDirectory,
   } = api;
 
   // Window control buttons
@@ -155,6 +161,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     sessionListEl: document.getElementById('sessionList'),
     newClaudeButton: document.getElementById('newClaude'),
     newCodexButton: document.getElementById('newCodex'),
+    sessionDirInput: document.getElementById('sessionDir'),
+    browseDirButton: document.getElementById('browseDirBtn'),
     terminalHostEl: document.getElementById('terminal'),
     emptyStateEl: document.getElementById('emptyState'),
   };
@@ -468,8 +476,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     setActionButtonsDisabled(true);
 
     try {
-      const session = await createSession(type);
+      const cwd = elements.sessionDirInput.value.trim() || undefined;
+      const session = await createSession(type, cwd);
       addSession(session);
+      // Keep the directory input value for subsequent sessions
     } catch (error) {
       console.error('[renderer] Failed to create session', error);
       const message = error?.message ?? 'Unknown error';
@@ -502,6 +512,16 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   elements.newClaudeButton.addEventListener('click', () => handleCreateSession('claude'));
   elements.newCodexButton.addEventListener('click', () => handleCreateSession('codex'));
+
+  // Directory browse button
+  if (elements.browseDirButton && selectDirectory) {
+    elements.browseDirButton.addEventListener('click', async () => {
+      const selectedPath = await selectDirectory();
+      if (selectedPath) {
+        elements.sessionDirInput.value = selectedPath;
+      }
+    });
+  }
 
   disposerFns.push(onSessionData(({ id, data }) => {
     // Debug: log all data for the first 30 seconds with hex dump
