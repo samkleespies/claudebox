@@ -106,6 +106,7 @@ function createWindow() {
     minHeight: 600,
     title: 'ClaudeBox',
     icon: icon,
+    frame: false,  // Remove default titlebar
     autoHideMenuBar: true,  // Hide the menu bar
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
@@ -169,12 +170,14 @@ function registerIpcHandlers() {
     try {
       const initialSize = { cols: 100, rows: 30 };
       const meta = buildSessionMetadata(type);
+      const cwd = process.cwd();
       const ptyProcess = spawnShell(meta.command, initialSize.cols, initialSize.rows);
 
       const session = {
         ...meta,
         status: 'running',
         createdAt: new Date().toISOString(),
+        cwd,
         pty: ptyProcess,
         exitCode: null,
       };
@@ -200,6 +203,7 @@ function registerIpcHandlers() {
         status: session.status,
         command: session.command,
         createdAt: session.createdAt,
+        cwd: session.cwd,
       };
     } catch (error) {
       reportError('failed to create session', error);
@@ -216,6 +220,7 @@ function registerIpcHandlers() {
       status: session.status,
       command: session.command,
       createdAt: session.createdAt,
+      cwd: session.cwd,
       exitCode: session.exitCode,
     }));
   });
@@ -260,6 +265,32 @@ function registerIpcHandlers() {
     terminateSession(session);
     sessions.delete(id);
     log(`session ${id} disposed`);
+  });
+
+  // Window control handlers
+  ipcMain.handle('window:minimize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      win.minimize();
+    }
+  });
+
+  ipcMain.handle('window:maximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      if (win.isMaximized()) {
+        win.restore();
+      } else {
+        win.maximize();
+      }
+    }
+  });
+
+  ipcMain.handle('window:close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      win.close();
+    }
   });
 }
 

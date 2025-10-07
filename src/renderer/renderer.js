@@ -21,7 +21,8 @@ function createMockAPI() {
         title: `${type === 'claude' ? 'Claude' : 'Codex'} Session ${sessionCounter}`,
         status: 'running',
         command: type === 'claude' ? 'claude --dangerously-skip-permissions' : 'codex --dangerously-bypass-approvals-and-sandbox',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        cwd: '/mock/path'
       };
       mockSessions.set(id, session);
 
@@ -65,7 +66,11 @@ function createMockAPI() {
     onSessionExit: (callback) => {
       window._mockExitHandler = callback;
       return () => { window._mockExitHandler = null; };
-    }
+    },
+    // Mock window controls
+    windowMinimize: () => console.log('[mock] minimize'),
+    windowMaximize: () => console.log('[mock] maximize'),
+    windowClose: () => console.log('[mock] close')
   };
 }
 
@@ -126,13 +131,30 @@ window.addEventListener('DOMContentLoaded', async () => {
     dispose,
     onSessionData,
     onSessionExit,
+    windowMinimize,
+    windowMaximize,
+    windowClose,
   } = api;
+
+  // Window control buttons
+  const minimizeBtn = document.getElementById('minimizeBtn');
+  const maximizeBtn = document.getElementById('maximizeBtn');
+  const closeBtn = document.getElementById('closeBtn');
+
+  if (minimizeBtn && windowMinimize) {
+    minimizeBtn.addEventListener('click', () => windowMinimize());
+  }
+  if (maximizeBtn && windowMaximize) {
+    maximizeBtn.addEventListener('click', () => windowMaximize());
+  }
+  if (closeBtn && windowClose) {
+    closeBtn.addEventListener('click', () => windowClose());
+  }
 
   const elements = {
     sessionListEl: document.getElementById('sessionList'),
     newClaudeButton: document.getElementById('newClaude'),
     newCodexButton: document.getElementById('newCodex'),
-    sessionTitleEl: document.getElementById('sessionTitle'),
     terminalHostEl: document.getElementById('terminal'),
     emptyStateEl: document.getElementById('emptyState'),
   };
@@ -259,6 +281,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       const li = document.createElement('li');
       li.className = 'session-item';
 
+      // Add session type class
+      li.classList.add(`session-item--${session.type}`);
+
       if (session.id === state.activeSessionId) {
         li.classList.add('active');
       }
@@ -274,12 +299,20 @@ window.addEventListener('DOMContentLoaded', async () => {
       title.className = 'session-item__title';
       title.textContent = session.title;
 
-      const subtitle = document.createElement('p');
-      subtitle.className = 'session-item__subtitle';
-      subtitle.textContent = `${session.type === 'claude' ? 'Claude' : 'Codex'} - ${new Date(session.createdAt).toLocaleTimeString()}`;
+      const path = document.createElement('p');
+      path.className = 'session-item__path';
+      path.textContent = session.cwd || '';
 
       meta.appendChild(title);
-      meta.appendChild(subtitle);
+      meta.appendChild(path);
+
+      const statusColumn = document.createElement('div');
+      statusColumn.className = 'session-item__status-column';
+
+      const timestamp = document.createElement('span');
+      timestamp.className = 'session-item__timestamp';
+      const timeStr = new Date(session.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      timestamp.textContent = timeStr;
 
       const status = document.createElement('span');
       status.className = 'session-item__status';
@@ -291,9 +324,17 @@ window.addEventListener('DOMContentLoaded', async () => {
         status.classList.add('session-item__status--exited');
       }
 
+      statusColumn.appendChild(status);
+      statusColumn.appendChild(timestamp);
+
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'session-item__delete';
-      deleteBtn.innerHTML = '🗑️';
+      deleteBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <path d="M5.5 1.5h5M2 4h12M3.5 4l.5 9.5a1 1 0 001 1h6a1 1 0 001-1L13 4M6.5 7v4M9.5 7v4"
+                stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `;
       deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (session.status === 'running') {
@@ -304,7 +345,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       });
 
       li.appendChild(meta);
-      li.appendChild(status);
+      li.appendChild(statusColumn);
       li.appendChild(deleteBtn);
 
       li.addEventListener('click', () => {
@@ -318,14 +359,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   function updateWorkspaceHeader() {
-    const active = state.activeSessionId ? findSession(state.activeSessionId) : null;
-
-    if (!active) {
-      elements.sessionTitleEl.textContent = 'No session selected';
-      return;
-    }
-
-    elements.sessionTitleEl.textContent = active.title;
+    // Header removed - this function is now a no-op
   }
 
   function appendToSessionBuffer(id, data) {

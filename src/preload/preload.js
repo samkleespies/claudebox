@@ -18,5 +18,9 @@ contextBridge.exposeInMainWorld('claudebox', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('session:exit', listener);
     return () => ipcRenderer.removeListener('session:exit', listener);
-  }
+  },
+  // Window controls
+  windowMinimize: () => invoke('window:minimize'),
+  windowMaximize: () => invoke('window:maximize'),
+  windowClose: () => invoke('window:close')
 });

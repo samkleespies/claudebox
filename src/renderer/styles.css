@@ -2,14 +2,12 @@
 
 :root {
   color-scheme: dark;
-  /* Modern orange & dark theme */
   --sidebar-bg: #0d0d0d;
   --sidebar-border: #1f1f1f;
   --workspace-bg: #151515;
   --card-bg: #0d0d0d;
   --accent-claude: #ff6b35;
-  --accent-codex: #ff8c42;
-  --accent-muted: #2a2a2a;
+  --accent-codex: #5899ff;
   --text-primary: #e8e8e8;
   --text-secondary: #888888;
   --success: #22c55e;
@@ -31,6 +29,7 @@ html, body {
 
 body {
   display: flex;
+  -webkit-app-region: drag;
 }
 
 .app-shell {
@@ -38,6 +37,19 @@ body {
   width: 100%;
   height: 100%;
 }
+
+/* Make interactive elements non-draggable */
+button,
+input,
+textarea,
+select,
+.session-list,
+.terminal-host,
+.xterm {
+  -webkit-app-region: no-drag;
+}
+
+/* ========== SIDEBAR ========== */
 
 .sidebar {
   width: 300px;
@@ -56,33 +68,10 @@ body {
   gap: 14px;
 }
 
-.sidebar__logo {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, var(--accent-claude), var(--accent-codex));
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
 .sidebar__title {
   display: flex;
   justify-content: center;
   width: 100%;
-}
-
-.sidebar__title h1 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.sidebar__title p {
-  margin: 4px 0 0;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
 }
 
 .ascii-logo {
@@ -100,13 +89,18 @@ body {
 }
 
 .sidebar__action {
-  padding: 10px 10px 10px 10px;
+  padding: 10px;
   border-radius: 18px;
   border: none;
+  outline: none;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
   max-width: 75px;
   margin: 0 auto;
+}
+
+.sidebar__action:focus {
+  outline: none;
 }
 
 .sidebar__action:disabled {
@@ -116,12 +110,10 @@ body {
 
 .sidebar__action--claude {
   background: #333333;
-  /* box-shadow: 0 4px 12px rgba(255, 107, 53, 0.25); */
 }
 
 .sidebar__action--codex {
   background: hsl(214, 100%, 65%);
-  /* box-shadow: 0 4px 12px rgba(255, 140, 66, 0.2); */
 }
 
 .sidebar__action:not(:disabled):hover {
@@ -150,22 +142,26 @@ body {
   color: var(--text-secondary);
 }
 
+/* ========== SESSION LIST ========== */
+
 .session-list {
   list-style: none;
-  margin: 0;
+  margin: 0 -20px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   flex: 1;
   overflow-y: auto;
 }
 
 .session-item {
-  padding: 12px 14px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 0;
   background: #1a1a1a;
-  border: 1px solid #252525;
+  border: none;
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -177,12 +173,13 @@ body {
 .session-item__meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0px;
   min-width: 0;
+  flex: 1;
 }
 
 .session-item__title {
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   font-weight: 600;
   margin: 0;
   white-space: nowrap;
@@ -190,14 +187,32 @@ body {
   text-overflow: ellipsis;
 }
 
-.session-item__subtitle {
+.session-item__path {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.65rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-item__status-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-left: -15px;
+  margin-right: -5px;
+}
+
+.session-item__timestamp {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .session-item__status {
-  font-size: 0.7rem;
+  font-size: 0.5rem;
   padding: 3px 8px;
   border-radius: 999px;
   text-transform: uppercase;
@@ -205,20 +220,6 @@ body {
   background: #252525;
   color: var(--text-secondary);
   white-space: nowrap;
-}
-
-.session-item.unread {
-  border-color: rgba(59, 130, 246, 0.6);
-}
-
-.session-item.active {
-  background: #1f1410;
-  border-color: #ff6b35;
-}
-
-.session-item.active .session-item__status {
-  background: rgba(255, 107, 53, 0.2);
-  color: #ffb89d;
 }
 
 .session-item__status--running {
@@ -235,72 +236,87 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 1rem;
-  padding: 4px 8px;
+  padding: 0px;
+  margin-right: -5px;
   opacity: 0.6;
   transition: opacity 0.15s ease, transform 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
 }
 
 .session-item__delete:hover {
   opacity: 1;
   transform: scale(1.1);
+  color: var(--text-primary);
 }
+
+.session-item--claude.active {
+  border-top-color: var(--accent-claude);
+  border-bottom-color: var(--accent-claude);
+  background: #1f1410;
+}
+
+.session-item--claude.active .session-item__status {
+  background: rgba(255, 107, 53, 0.2);
+  color: #ffb89d;
+}
+
+.session-item--codex.active {
+  border-top-color: var(--accent-codex);
+  border-bottom-color: var(--accent-codex);
+  background: #0f1419;
+}
+
+.session-item--codex.active .session-item__status {
+  background: rgba(88, 153, 255, 0.2);
+  color: #9dc3ff;
+}
+
+/* ========== WORKSPACE ========== */
 
 .workspace {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  position: relative;
 }
 
-.workspace__header {
+/* Window Controls */
+.window-controls {
+  display: flex;
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1000;
+}
+
+.window-controls__button {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 24px 28px 18px;
-  border-bottom: 1px solid #1f1f1f;
-}
-
-.workspace__header h2 {
-  margin: 0;
-  font-size: 1.35rem;
-  font-weight: 600;
-}
-
-.workspace__subtitle {
-  margin: 6px 0 0;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-.workspace__controls {
-  display: flex;
-  gap: 10px;
-}
-
-.control-button {
-  padding: 9px 16px;
-  font-size: 0.85rem;
-  border-radius: 8px;
+  justify-content: center;
+  width: 46px;
+  height: 32px;
   border: none;
-  background: rgba(248, 250, 252, 0.08);
-  color: var(--text-primary);
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.control-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.window-controls__button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
 }
 
-.control-button:not(:disabled):hover {
-  background: rgba(248, 250, 252, 0.16);
+.window-controls__button--close:hover {
+  background: #e81123;
+  color: white;
 }
 
-.control-button--secondary {
-  background: rgba(148, 163, 184, 0.12);
-}
+/* ========== TERMINAL ========== */
 
 .workspace__terminal {
   position: relative;
@@ -313,18 +329,10 @@ body {
   display: flex;
 }
 
-body.debug-mode .workspace__terminal {
-  outline: 3px solid red !important;
-}
-
 .terminal-host {
   flex: 1;
   height: 100%;
   margin-right: -18px;
-}
-
-body.debug-mode .terminal-host {
-  outline: 3px solid blue !important;
 }
 
 .terminal-empty {
@@ -350,26 +358,11 @@ body.debug-mode .terminal-host {
   display: none;
 }
 
-.workspace__status {
-  padding: 14px 28px;
-  border-top: 1px solid #1f1f1f;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-}
-
 .xterm {
   padding: 0;
   font-size: 13px;
   line-height: 1.35;
-}
-
-
-.xterm {
   width: 100%;
-}
-
-body.debug-mode .xterm {
-  outline: 3px solid yellow !important;
 }
 
 .xterm .xterm-viewport {
@@ -378,16 +371,8 @@ body.debug-mode .xterm {
   overflow-y: scroll;
 }
 
-body.debug-mode .xterm .xterm-viewport {
-  outline: 3px solid green !important;
-}
-
 .xterm .xterm-screen {
   width: 100% !important;
-}
-
-body.debug-mode .xterm .xterm-screen {
-  outline: 3px solid purple !important;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar {
@@ -395,16 +380,27 @@ body.debug-mode .xterm .xterm-screen {
   width: 0;
 }
 
+/* ========== DEBUG MODE ========== */
 
-@media (max-width: 1024px) {
-  .sidebar {
-    width: 260px;
-    padding: 20px 16px;
-  }
-
-  .workspace__header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
+body.debug-mode .workspace__terminal {
+  outline: 3px solid red !important;
 }
+
+body.debug-mode .terminal-host {
+  outline: 3px solid blue !important;
+}
+
+body.debug-mode .xterm {
+  outline: 3px solid yellow !important;
+}
+
+body.debug-mode .xterm .xterm-viewport {
+  outline: 3px solid green !important;
+}
+
+body.debug-mode .xterm .xterm-screen {
+  outline: 3px solid purple !important;
+}
+
+/* ========== RESPONSIVE ========== */
+
