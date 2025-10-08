@@ -58,6 +58,10 @@ function spawnShell(command, cols, rows, cwd) {
     ? ['-NoExit', '-Command', `$env:TERM='xterm-256color'; $env:COLORTERM='truecolor'; ${command}`]
     : ['-l', '-c', command];
 
+  // Prefer ConPTY on Windows 10/11 for proper 256/truecolor support.
+  // The previous configuration forced winpty (useConpty: false), which
+  // downgrades colors to the 16‑color palette and can shift hues (e.g. orange → bright red).
+  // Keep a single code path and let node-pty use ConPTY on Windows.
   return pty.spawn(shell, args, {
     name: 'xterm-256color',
     cols,
@@ -68,7 +72,7 @@ function spawnShell(command, cols, rows, cwd) {
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
     },
-    useConpty: false,
+    useConpty: true,
   });
 }
 
