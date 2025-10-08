@@ -48,6 +48,42 @@ function buildSessionMetadata(type) {
 
 function spawnShell(command, cols, rows, cwd) {
   const env = { ...process.env };
+
+  // Add common node binary paths to PATH for CLIs installed via npm/nvm
+  const homeDir = require('os').homedir();
+  const fs = require('fs');
+  const pathSeparator = process.platform === 'win32' ? ';' : ':';
+
+  const additionalPaths = [];
+
+  // Unix-like systems (Linux/macOS)
+  if (process.platform !== 'win32') {
+    const nvmPath = path.join(homeDir, '.nvm/versions/node');
+    const npmGlobalPath = path.join(homeDir, '.npm-global/bin');
+
+    additionalPaths.push(npmGlobalPath);
+
+    // Add all nvm node versions bin directories
+    if (fs.existsSync(nvmPath)) {
+      const nvmBinPaths = fs.readdirSync(nvmPath)
+        .map(version => path.join(nvmPath, version, 'bin'))
+        .filter(p => fs.existsSync(p));
+      additionalPaths.push(...nvmBinPaths);
+    }
+  }
+  // Windows
+  else {
+    const appDataPath = process.env.APPDATA;
+    if (appDataPath) {
+      const npmPath = path.join(appDataPath, 'npm');
+      if (fs.existsSync(npmPath)) {
+        additionalPaths.push(npmPath);
+      }
+    }
+  }
+
+  env.PATH = [...additionalPaths, env.PATH || ''].filter(Boolean).join(pathSeparator);
+
   const workingDir = cwd || process.cwd();
   const shell = process.platform === 'win32'
     ? 'powershell.exe'
