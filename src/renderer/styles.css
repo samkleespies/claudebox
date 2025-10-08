@@ -87,130 +87,7 @@ select,
   --sidebar-scale: 0.85;
 }
 
-@container (max-width: 280px) {
-  .sidebar__title {
-    transform: scale(0.9);
-    transform-origin: center;
-  }
-
-  .sidebar__dir-input {
-    font-size: 0.68rem;
-    padding: 6px 8px;
-  }
-
-  .sidebar__dir-browse {
-    padding: 6px;
-  }
-
-  .sidebar__dir-browse svg {
-    width: 16px;
-    height: 16px;
-  }
-}
-
-@container (max-width: 250px) {
-  .sidebar__title {
-    transform: scale(0.82);
-    transform-origin: center;
-  }
-
-  .sidebar__action {
-    padding: 7px;
-    gap: 6px;
-  }
-
-  .sidebar__action span {
-    opacity: 0.7;
-  }
-
-  .button-icon {
-    width: 18px !important;
-    height: 18px !important;
-  }
-
-  .sidebar__dir-input {
-    font-size: 0.65rem;
-    padding: 5px 7px;
-  }
-
-  .sidebar__dir-browse {
-    padding: 5px;
-  }
-
-  .sidebar__dir-browse svg {
-    width: 14px;
-    height: 14px;
-  }
-}
-
-@container (max-width: 230px) {
-  .sidebar__title {
-    transform: scale(0.75);
-    transform-origin: center;
-  }
-
-  .sidebar__action {
-    padding: 8px !important;
-    gap: 0 !important;
-    justify-content: center !important;
-  }
-
-  .sidebar__action span {
-    opacity: 0 !important;
-    width: 0 !important;
-    min-width: 0 !important;
-    flex: 0 0 auto !important;
-    overflow: hidden !important;
-  }
-
-  .button-icon {
-    width: 20px !important;
-    height: 20px !important;
-    flex: 0 0 auto !important;
-  }
-
-  /* Lock directory input/button sizes at this breakpoint - only width changes below */
-  .sidebar__dir-input {
-    font-size: 0.58rem !important;
-    padding: 3px 5px !important;
-    min-width: 0 !important;
-    flex: 1 !important;
-  }
-
-  .sidebar__dir-input-group {
-    gap: 6px !important;
-    display: flex !important;
-    align-items: center !important;
-    /* Make the group match the actions container width exactly */
-    width: calc(100% - 40px) !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-
-  .sidebar__dir-browse {
-    padding: 3px !important;
-    /* Keep square shape: 12px icon + 6px padding (3px each side) + 2px border = 20px total */
-    width: 20px !important;
-    height: 20px !important;
-    flex-shrink: 0 !important;
-  }
-
-  .sidebar__dir-browse svg {
-    width: 12px !important;
-    height: 12px !important;
-  }
-}
-
-@container (max-width: 210px) {
-  .sidebar__title {
-    transform: scale(0.7);
-    transform-origin: center;
-  }
-
-  .sidebar__dir-label {
-    font-size: 0.6rem !important;
-  }
-}
+/* ALL CONTAINER QUERY ANIMATIONS/RESIZING REMOVED FOR BUTTONS AND INPUTS */
 
 .sidebar__branding {
   display: flex;
@@ -272,15 +149,14 @@ select,
               opacity 0.12s ease,
               border-color 0.12s ease,
               padding 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              gap 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              justify-content 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+              gap 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
   flex: 1;
   max-width: 140px;
-  min-width: 80px;
+  min-width: 0;
   height: 75%;
   overflow: hidden;
 }
@@ -335,9 +211,12 @@ select,
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  margin-left: 0;
+  margin-right: 0;
   transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
               height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              flex 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+              flex 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              margin 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 .sidebar__action--claude .button-icon {
