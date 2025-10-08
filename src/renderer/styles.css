@@ -72,7 +72,8 @@ select,
 }
 
 .sidebar.hidden {
-  margin-left: calc(-300px - 1px);
+  /* Slide out by its actual current width (set from JS) */
+  margin-left: calc(-1 * var(--sidebar-width, 300px) - 1px);
   opacity: 0;
   pointer-events: none;
 }

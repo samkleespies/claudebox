@@ -101,6 +101,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Initialize CSS custom property for current sidebar width
+  try {
+    const initialWidth = Math.round(elements.sidebar.offsetWidth);
+    elements.sidebar.style.setProperty('--sidebar-width', `${initialWidth}px`);
+  } catch (_) {
+    // no-op; safe default remains in CSS
+  }
+
   // Windows 11 uses piecewise sRGB color curve while Linux/Mac use gamma 2.2.
   // This causes minimumContrastRatio to calculate luminance differently and shift colors.
   // On Windows, disable contrast adjustment to match Linux/Mac color rendering.
@@ -626,6 +634,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Sidebar toggle functionality
   function toggleSidebar() {
+    // Capture current sidebar width so CSS can slide exactly that distance
+    const rect = elements.sidebar.getBoundingClientRect();
+    elements.sidebar.style.setProperty('--sidebar-width', `${Math.round(rect.width)}px`);
+
     const isHidden = elements.sidebar.classList.toggle('hidden');
     if (isHidden) {
       // Sidebar is hiding: wait for it to slide out, then show workspace button
@@ -676,6 +688,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Double-click to reset sidebar width
   elements.sidebarResizer.addEventListener('dblclick', () => {
     elements.sidebar.style.width = `${DEFAULT_SIDEBAR_WIDTH}px`;
+    elements.sidebar.style.setProperty('--sidebar-width', `${DEFAULT_SIDEBAR_WIDTH}px`);
     updateAsciiLogoSize(DEFAULT_SIDEBAR_WIDTH);
     fitAndNotify();
   });
@@ -704,6 +717,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
 
     elements.sidebar.style.width = `${constrainedWidth}px`;
+    elements.sidebar.style.setProperty('--sidebar-width', `${constrainedWidth}px`);
     updateAsciiLogoSize(constrainedWidth);
     fitAndNotify();
   });
