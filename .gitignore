@@ -1,9 +1,37 @@
+# Dependencies
+node_modules/
+
 # Build output
 out/
 dist/
+build/
 
-# Dependencies
-node_modules/
+# Electron packaging
+*.asar
+
+# Native modules (rebuilt per platform)
+*.node
+*.dll
+*.dylib
+*.so
+*.a
+
+# Windows build artifacts
+*.obj
+*.pdb
+*.iobj
+*.ipdb
+*.exp
+*.lib
+*.ilk
+*.tlog/
+*.recipe
+*.lastbuildstate
+.forge-meta
+
+# macOS build artifacts
+*.dSYM/
+DerivedData/
 
 # Logs
 *.log
@@ -13,35 +41,62 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+!.vscode/settings.json
+.idea/
+*.sublime-workspace
+*.sublime-project
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-
-# OS files
-Thumbs.db
+*.swp
+*.swo
+*~
 
 # Environment variables
 .env
 .env.local
 .env.*.local
+.envrc
 
-# Electron builder output
-build/
-
-# Playwright MCP (runtime data)
-.playwright-mcp/
-
-# NVIDIA logs/artifacts
-NVIDIA Corporation/
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
 
 # Temporary files
 *.tmp
 *.temp
 .cache/
+tmp/
+
+# electron-builder
+.electron-builder-cache/
+
+# Git worktrees (local development)
+worktree-*/
+
+# Playwright MCP (runtime data)
+.playwright-mcp/
+
+# Package manager locks (keep package-lock.json, ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Debug files
+*.stackdump

@@ -7,6 +7,7 @@
     "start": "electron-vite preview",
     "build": "electron-vite build",
     "build:win": "npm run build && electron-builder --win portable",
+    "build:mac": "npm run build && electron-builder --mac dmg",
     "lint": "echo \"No lint configured\"",
     "postinstall": "patch-package"
   },
@@ -21,7 +22,7 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
-    "electron": "^38.2.1",
+    "electron": "^27.3.11",
     "electron-builder": "^26.0.12",
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^4.0.1",
@@ -39,7 +40,12 @@
     },
     "files": [
       "out/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**/*",
+      "node_modules/@homebridge/node-pty-prebuilt-multiarch/**/*"
     ],
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
@@ -47,13 +53,45 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "src/renderer/assets/images/app-icon.ico"
     },
     "portable": {
       "artifactName": "ClaudeBox-Portable.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "artifactName": "ClaudeBox-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "ClaudeBox-${arch}.dmg",
+      "title": "ClaudeBox ${version}",
+      "icon": "src/renderer/assets/images/app-icon.icns",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   }
 }

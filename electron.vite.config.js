@@ -25,7 +25,9 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/index.html')
         }
-      }
-    }
+      },
+      assetsDir: 'assets'
+    },
+    publicDir: resolve(__dirname, 'src/renderer/assets')
   }
 })

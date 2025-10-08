@@ -312,8 +312,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       const icon = document.createElement('img');
       icon.className = 'session-item__icon';
       icon.src = session.type === 'claude'
-        ? './assets/images/claude-icon.svg'
-        : './assets/images/gpt-icon.svg';
+        ? './images/claude-icon.svg'
+        : './images/gpt-icon.svg';
       icon.alt = `${session.type} icon`;
 
       const title = document.createElement('p');
