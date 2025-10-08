@@ -583,7 +583,7 @@ select,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: text;
+  cursor: pointer;
 }
 
 .session-item__title-input {

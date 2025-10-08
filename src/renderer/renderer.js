@@ -375,7 +375,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     session.buffer = (session.buffer || '') + data;
 
-    // Detect activity state from terminal output
+    // Detect activity state from terminal output for all sessions
     updateSessionActivity(session, data);
 
     if (state.activeSessionId === id) {
@@ -419,6 +419,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     state.activeSessionId = id;
     session.hasActivity = false;
 
+    // Reset activity tracking when switching to this session
+    // Any new activity will be detected in real-time
+    session.activityState = 'idle';
+    session.recentChunks = [];
+    if (session.activityTimeout) {
+      clearTimeout(session.activityTimeout);
+      session.activityTimeout = null;
+    }
+
     terminal.reset();
     terminal.write(session.buffer || '');
     terminal.focus();
@@ -427,79 +436,120 @@ window.addEventListener('DOMContentLoaded', async () => {
     updateEmptyState();
   }
 
+  function updateSessionStatus(session) {
+    // Find the session's index and DOM element
+    const sessionIndex = state.sessions.indexOf(session);
+    if (sessionIndex === -1) return;
+
+    const sessionElement = elements.sessionListEl.children[sessionIndex];
+    if (!sessionElement) return;
+
+    // Update only the status element
+    const statusEl = sessionElement.querySelector('.session-item__status');
+    if (!statusEl) return;
+
+    // Remove all activity state classes
+    statusEl.classList.remove(
+      'session-item__status--thinking',
+      'session-item__status--working',
+      'session-item__status--responding'
+    );
+
+    // Add new state class if not idle
+    if (session.activityState !== 'idle') {
+      statusEl.classList.add(`session-item__status--${session.activityState}`);
+    }
+
+    // Update text content
+    const statusLabels = {
+      idle: 'Idle',
+      thinking: 'Thinking',
+      working: 'Working',
+      responding: 'Responding',
+    };
+    statusEl.textContent = statusLabels[session.activityState] || 'Idle';
+  }
+
   function updateSessionActivity(session, data) {
-    // Strip ANSI codes and clean up the data for pattern matching
-    const cleanData = data
+    // Terminal sessions don't have AI activity - skip detection
+    if (session.type === 'terminal') {
+      return;
+    }
+
+    const timestamp = Date.now();
+
+    // Add chunk to rolling window
+    session.recentChunks.push({ data, timestamp });
+
+    // Remove chunks older than window (keep last 1 second)
+    const cutoff = timestamp - session.chunkWindowMs;
+    session.recentChunks = session.recentChunks.filter(c => c.timestamp > cutoff);
+
+    // Aggregate recent chunks for pattern matching
+    const aggregatedData = session.recentChunks.map(c => c.data).join('');
+
+    // Strip ANSI codes and clean up the aggregated data
+    const cleanData = aggregatedData
       .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')  // Remove ANSI escape codes
-      .replace(/\r/g, '')  // Remove carriage returns
+      .replace(/\x1b\][0-9;]*\x07/g, '')      // Remove OSC sequences
+      .replace(/\r/g, '')                      // Remove carriage returns
       .trim();
 
     // Skip if it's just whitespace or empty after cleaning
     if (!cleanData) return;
 
-    // Pattern detection - balanced between accuracy and responsiveness
-    const patterns = {
-      // User input detection - ignore state changes during user typing
-      userInput: /^[a-z\s]{1,50}$/i,  // Short lowercase text = likely user typing
+    // SIMPLIFIED: Only detect activity spinner characters
+    let newState = session.activityState;
+    let confidence = 0;
 
-      // Tool usage - catch most tool-related activity
-      toolUse: /(?:Using tool|tool:|read.*file|writ.*file|edit.*file|bash|grep|glob|search|execut|running command)/i,
+    // Check for activity indicators:
+    // Claude Code: ✽✦✧✨
+    // Codex: ◦•
+    if (/[✽✦✧✨◦•]/.test(cleanData)) {
+      newState = 'working';
+      confidence = 0.9;
+    }
 
-      // Thinking/planning - only if it's clearly from Claude (starts with capital or has context)
-      thinking: /(?:^Thinking\.\.\.|^Planning|^Analyzing|Envisioning)/i,
+    // Only update if state changed with sufficient confidence
+    const minConfidence = 0.5;
 
-      // Response streaming - must be substantial (avoid false positives from session startup)
-      responding: /(?:^[A-Z][a-z]{3,}.{25,}[.!?])/,
-
-      // Completion/done indicators
-      done: /(?:done|completed|finished|success|ready)/i,
-
-      // Prompt ready
-      prompt: />\s*$/,
+    // Valid state transitions (prevents illogical jumps)
+    const validTransitions = {
+      idle: ['thinking', 'working', 'responding'],
+      thinking: ['working', 'responding', 'idle'],
+      working: ['responding', 'thinking', 'idle'],
+      responding: ['idle', 'thinking', 'working'],
     };
 
-    let newState = session.activityState;
+    // Check if transition is valid
+    const canTransition = validTransitions[session.activityState]?.includes(newState) || newState === session.activityState;
 
-    // Don't change state if user is typing
-    if (patterns.userInput.test(cleanData)) {
-      return;
-    }
-
-    // Detect state based on patterns (order matters - most specific first)
-    if (patterns.toolUse.test(cleanData)) {
-      newState = 'working';
-    } else if (patterns.thinking.test(cleanData)) {
-      newState = 'thinking';
-    } else if (patterns.done.test(cleanData)) {
-      newState = 'idle';
-    } else if (patterns.prompt.test(cleanData)) {
-      newState = 'idle';
-    } else if (patterns.responding.test(cleanData)) {
-      newState = 'responding';
-    }
-
-    // Track any activity (non-idle states)
-    const isActive = newState !== 'idle';
-
-    // Only update if state changed
-    if (newState !== session.activityState) {
+    if (newState !== session.activityState && confidence >= minConfidence && canTransition) {
       session.activityState = newState;
-      renderSessionList();
+      updateSessionStatus(session);
     }
 
-    // Reset timeout - if no activity for 1.5s, assume idle
+    // Variable timeout based on state
+    const stateTimeouts = {
+      thinking: 4000,   // Thinking can take a while
+      working: 3000,    // Tool execution has gaps
+      responding: 2000, // Streaming is more continuous
+      idle: 1500,
+    };
+
+    // Reset timeout
     if (session.activityTimeout) {
       clearTimeout(session.activityTimeout);
     }
 
-    if (isActive) {
-      session.activityTimeout = setTimeout(() => {
-        if (session.activityState !== 'idle') {
-          session.activityState = 'idle';
-          renderSessionList();
-        }
-      }, 1500);  // Faster idle detection (1.5s)
-    }
+    const timeout = stateTimeouts[session.activityState] || 2000;
+
+    session.activityTimeout = setTimeout(() => {
+      if (session.activityState !== 'idle') {
+        session.activityState = 'idle';
+        updateSessionStatus(session);
+      }
+    }, timeout);
   }
 
   function updateActiveSessionUI() {
@@ -530,6 +580,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       hasActivity: false,
       activityState: 'idle',  // idle | thinking | working | responding
       activityTimeout: null,
+      // Chunk aggregation for better pattern detection
+      recentChunks: [],
+      chunkWindowMs: 1000,  // 1 second context window
     };
 
     state.sessions.push(session);
