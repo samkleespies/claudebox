@@ -79,7 +79,6 @@
     "dmg": {
       "artifactName": "ClaudeBox-${arch}.dmg",
       "title": "ClaudeBox ${version}",
-      "icon": "src/renderer/assets/images/app-icon.icns",
       "contents": [
         {
           "x": 130,
