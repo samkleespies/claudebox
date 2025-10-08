@@ -56,8 +56,19 @@
         </div>
         <div class="sidebar__list-header">Sessions</div>
         <ul id="sessionList" class="session-list"></ul>
+        <button id="sidebarToggle" class="sidebar__toggle" aria-label="Toggle sidebar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
       </aside>
+      <div id="sidebarResizer" class="sidebar-resizer"></div>
       <main class="workspace">
+        <button id="sidebarToggleWorkspace" class="sidebar__toggle sidebar__toggle--workspace" aria-label="Toggle sidebar" style="display: none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
         <div class="window-controls">
           <button id="minimizeBtn" class="window-controls__button window-controls__button--minimize" aria-label="Minimize">
             <svg width="12" height="12" viewBox="0 0 12 12">

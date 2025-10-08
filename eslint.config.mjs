@@ -34,6 +34,7 @@ export default [
         prompt: 'readonly',
         setTimeout: 'readonly',
         setInterval: 'readonly',
+        clearTimeout: 'readonly',
         clearInterval: 'readonly',
         ResizeObserver: 'readonly',
         requestAnimationFrame: 'readonly'

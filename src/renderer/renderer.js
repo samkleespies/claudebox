@@ -89,6 +89,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     browseDirButton: document.getElementById('browseDirBtn'),
     terminalHostEl: document.getElementById('terminal'),
     emptyStateEl: document.getElementById('emptyState'),
+    sidebar: document.querySelector('.sidebar'),
+    sidebarResizer: document.getElementById('sidebarResizer'),
+    sidebarToggle: document.getElementById('sidebarToggle'),
+    sidebarToggleWorkspace: document.getElementById('sidebarToggleWorkspace'),
   };
 
   if (!Object.values(elements).every(Boolean)) {
@@ -221,12 +225,27 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const status = document.createElement('span');
       status.className = 'session-item__status';
-      status.textContent = session.status === 'running' ? 'Live' : session.status === 'exited' ? 'Exited' : 'Stopping';
 
+      // Activity-aware status display
       if (session.status === 'running') {
+        const activityLabels = {
+          idle: 'Idle',
+          thinking: 'Thinking',
+          working: 'Working',
+          responding: 'Responding'
+        };
+        status.textContent = activityLabels[session.activityState] || 'Idle';
         status.classList.add('session-item__status--running');
+
+        // Add activity-specific class for animations
+        if (session.activityState !== 'idle') {
+          status.classList.add(`session-item__status--${session.activityState}`);
+        }
       } else if (session.status === 'exited') {
+        status.textContent = 'Exited';
         status.classList.add('session-item__status--exited');
+      } else {
+        status.textContent = 'Stopping';
       }
 
       statusColumn.appendChild(status);
@@ -271,6 +290,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     session.buffer = (session.buffer || '') + data;
 
+    // Detect activity state from terminal output
+    updateSessionActivity(session, data);
+
     if (state.activeSessionId === id) {
       terminal.write(data);
     } else {
@@ -301,14 +323,87 @@ window.addEventListener('DOMContentLoaded', async () => {
     state.activeSessionId = id;
     session.hasActivity = false;
 
-    // Update UI immediately for visual feedback
-    updateActiveSessionUI();
-
     terminal.reset();
     terminal.write(session.buffer || '');
     terminal.focus();
     fitAndNotify();
+    renderSessionList();
     updateEmptyState();
+  }
+
+  function updateSessionActivity(session, data) {
+    // Strip ANSI codes and clean up the data for pattern matching
+    const cleanData = data
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')  // Remove ANSI escape codes
+      .replace(/\r/g, '')  // Remove carriage returns
+      .trim();
+
+    // Skip if it's just whitespace or empty after cleaning
+    if (!cleanData) return;
+
+    // Pattern detection - balanced between accuracy and responsiveness
+    const patterns = {
+      // User input detection - ignore state changes during user typing
+      userInput: /^[a-z\s]{1,50}$/i,  // Short lowercase text = likely user typing
+
+      // Tool usage - catch most tool-related activity
+      toolUse: /(?:Using tool|tool:|read.*file|writ.*file|edit.*file|bash|grep|glob|search|execut|running command)/i,
+
+      // Thinking/planning - only if it's clearly from Claude (starts with capital or has context)
+      thinking: /(?:^Thinking\.\.\.|^Planning|^Analyzing|Envisioning)/i,
+
+      // Response streaming - must be substantial (avoid false positives from session startup)
+      responding: /(?:^[A-Z][a-z]{3,}.{25,}[.!?])/,
+
+      // Completion/done indicators
+      done: /(?:done|completed|finished|success|ready)/i,
+
+      // Prompt ready
+      prompt: />\s*$/,
+    };
+
+    let newState = session.activityState;
+
+    // Don't change state if user is typing
+    if (patterns.userInput.test(cleanData)) {
+      return;
+    }
+
+    // Detect state based on patterns (order matters - most specific first)
+    if (patterns.toolUse.test(cleanData)) {
+      newState = 'working';
+    } else if (patterns.thinking.test(cleanData)) {
+      newState = 'thinking';
+    } else if (patterns.done.test(cleanData)) {
+      newState = 'idle';
+    } else if (patterns.prompt.test(cleanData)) {
+      newState = 'idle';
+    } else if (patterns.responding.test(cleanData)) {
+      newState = 'responding';
+    }
+
+    // Track any activity (non-idle states)
+    const isActive = newState !== 'idle';
+
+    // Only update if state changed
+    if (newState !== session.activityState) {
+      session.activityState = newState;
+      renderSessionList();
+    }
+
+    // Reset timeout - if no activity for 1.5s, assume idle
+    if (session.activityTimeout) {
+      clearTimeout(session.activityTimeout);
+    }
+
+    if (isActive) {
+      session.activityTimeout = setTimeout(() => {
+        if (session.activityState !== 'idle') {
+          session.activityState = 'idle';
+          renderSessionList();
+        }
+      }, 1500);  // Faster idle detection (1.5s)
+    }
   }
 
   function updateActiveSessionUI() {
@@ -337,6 +432,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       ...sessionInfo,
       buffer: '',
       hasActivity: false,
+      activityState: 'idle',  // idle | thinking | working | responding
+      activityTimeout: null,
     };
 
     state.sessions.push(session);
@@ -350,7 +447,14 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const session = state.sessions[idx];
     const wasActive = state.activeSessionId === id;
+
+    // Clean up activity timeout
+    if (session.activityTimeout) {
+      clearTimeout(session.activityTimeout);
+    }
+
     state.sessions.splice(idx, 1);
 
     if (wasActive) {
@@ -449,6 +553,106 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
+
+  // Sidebar toggle functionality
+  function toggleSidebar() {
+    const isHidden = elements.sidebar.classList.toggle('hidden');
+    if (isHidden) {
+      elements.sidebarToggleWorkspace.style.display = 'flex';
+    } else {
+      elements.sidebarToggleWorkspace.style.display = 'none';
+    }
+    // Refit terminal after sidebar animation completes
+    setTimeout(() => fitAndNotify(), 300);
+  }
+
+  elements.sidebarToggle.addEventListener('click', toggleSidebar);
+  elements.sidebarToggleWorkspace.addEventListener('click', toggleSidebar);
+
+  // Sidebar resize functionality
+  let isResizing = false;
+  let startX = 0;
+  let startWidth = 0;
+  const DEFAULT_SIDEBAR_WIDTH = 300;
+
+  // Double-click to reset sidebar width
+  elements.sidebarResizer.addEventListener('dblclick', () => {
+    elements.sidebar.style.width = `${DEFAULT_SIDEBAR_WIDTH}px`;
+    fitAndNotify();
+  });
+
+  elements.sidebarResizer.addEventListener('mousedown', (e) => {
+    // Prevent double-click from triggering resize
+    if (e.detail > 1) return;
+
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = elements.sidebar.offsetWidth;
+    elements.sidebarResizer.classList.add('resizing');
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+
+    const deltaX = e.clientX - startX;
+    const newWidth = startWidth + deltaX;
+
+    // Constrain to min/max width
+    const minWidth = 200;
+    const maxWidth = 600;
+    const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+
+    elements.sidebar.style.width = `${constrainedWidth}px`;
+
+    // DEBUG: Log alignment info when sidebar is small
+    if (constrainedWidth <= 230) {
+      const codexButton = document.querySelector('.sidebar__action--codex');
+      const folderButton = elements.browseDirButton;
+      const inputGroup = document.querySelector('.sidebar__dir-input-group');
+      const actionsContainer = document.querySelector('.sidebar__actions > div:first-child');
+
+      if (codexButton && folderButton) {
+        const codexRect = codexButton.getBoundingClientRect();
+        const folderRect = folderButton.getBoundingClientRect();
+        const inputGroupRect = inputGroup.getBoundingClientRect();
+        const actionsRect = actionsContainer.getBoundingClientRect();
+
+        console.log('[ALIGNMENT DEBUG @ ' + constrainedWidth + 'px]');
+        console.log('  Codex button:', {
+          width: codexRect.width,
+          left: codexRect.left,
+          right: codexRect.right,
+          rightEdgeRelative: codexRect.right - elements.sidebar.getBoundingClientRect().left
+        });
+        console.log('  Folder button:', {
+          width: folderRect.width,
+          height: folderRect.height,
+          left: folderRect.left,
+          right: folderRect.right,
+          rightEdgeRelative: folderRect.right - elements.sidebar.getBoundingClientRect().left
+        });
+        console.log('  Containers:', {
+          actionsWidth: actionsRect.width,
+          inputGroupWidth: inputGroupRect.width,
+          gap: actionsRect.width - inputGroupRect.width
+        });
+        console.log('  Misalignment:', (folderRect.right - codexRect.right).toFixed(2) + 'px');
+      }
+    }
+
+    fitAndNotify();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      elements.sidebarResizer.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
 
   disposerFns.push(onSessionData(({ id, data }) => {
     appendToSessionBuffer(id, data);

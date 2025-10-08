@@ -45,6 +45,7 @@ textarea,
 select,
 .session-list,
 .session-item,
+.sidebar-resizer,
 .terminal-host,
 .xterm {
   -webkit-app-region: no-drag;
@@ -54,12 +55,164 @@ select,
 
 .sidebar {
   width: 300px;
+  min-width: 200px;
+  max-width: 600px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
   padding: 24px 20px;
   gap: 12px;
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  container-type: inline-size;
+}
+
+.sidebar.hidden {
+  margin-left: calc(-300px - 1px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Responsive scaling for smaller sidebar widths */
+.sidebar {
+  --sidebar-scale: 1;
+}
+
+/* Calculate scale based on sidebar width using CSS calc */
+.sidebar[style*="width: 280px"], .sidebar[style*="width: 27"], .sidebar[style*="width: 26"], .sidebar[style*="width: 25"], .sidebar[style*="width: 24"], .sidebar[style*="width: 23"], .sidebar[style*="width: 22"], .sidebar[style*="width: 21"], .sidebar[style*="width: 20"] {
+  --sidebar-scale: 0.85;
+}
+
+@container (max-width: 280px) {
+  .sidebar__title {
+    transform: scale(0.9);
+    transform-origin: center;
+  }
+
+  .sidebar__dir-input {
+    font-size: 0.68rem;
+    padding: 6px 8px;
+  }
+
+  .sidebar__dir-browse {
+    padding: 6px;
+  }
+
+  .sidebar__dir-browse svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@container (max-width: 250px) {
+  .sidebar__title {
+    transform: scale(0.82);
+    transform-origin: center;
+  }
+
+  .sidebar__action {
+    padding: 7px;
+    gap: 6px;
+  }
+
+  .sidebar__action span {
+    opacity: 0.7;
+  }
+
+  .button-icon {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .sidebar__dir-input {
+    font-size: 0.65rem;
+    padding: 5px 7px;
+  }
+
+  .sidebar__dir-browse {
+    padding: 5px;
+  }
+
+  .sidebar__dir-browse svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@container (max-width: 230px) {
+  .sidebar__title {
+    transform: scale(0.75);
+    transform-origin: center;
+  }
+
+  .sidebar__action {
+    padding: 8px !important;
+    gap: 0 !important;
+    justify-content: center !important;
+  }
+
+  .sidebar__action span {
+    opacity: 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    flex: 0 0 auto !important;
+    overflow: hidden !important;
+  }
+
+  .button-icon {
+    width: 20px !important;
+    height: 20px !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* Lock directory input/button sizes at this breakpoint - only width changes below */
+  .sidebar__dir-input {
+    font-size: 0.58rem !important;
+    padding: 3px 5px !important;
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+
+  .sidebar__dir-input-group {
+    gap: 6px !important;
+  }
+
+  .sidebar__dir-browse {
+    padding: 3px !important;
+    min-width: 0 !important;
+    /* Keep square shape: 12px icon + 6px padding (3px each side) + 2px border = 20px total */
+    width: 20px !important;
+    height: 20px !important;
+    flex-shrink: 0 !important;
+    /* Push to align with right button: account for left button (50%) + gap (8px/2 = 4px) */
+    margin-left: calc(50% - 10px - 6px) !important;
+  }
+
+  .sidebar__dir-browse svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+}
+
+@container (max-width: 210px) {
+  .sidebar__title {
+    transform: scale(0.7);
+    transform-origin: center;
+  }
+
+  .sidebar__dir-label {
+    font-size: 0.6rem !important;
+  }
+
+  /* Keep sizes locked - only adjust if needed for alignment */
+}
+
+@container (max-width: 200px) {
+  /* Keep sizes locked from 230px breakpoint - input width shrinks naturally via flex */
 }
 
 .sidebar__branding {
@@ -73,6 +226,7 @@ select,
   display: flex;
   justify-content: center;
   width: 100%;
+  transition: transform 0.2s ease;
 }
 
 .ascii-logo {
@@ -82,6 +236,7 @@ select,
   color: #d77757;
   font-family: monospace;
   white-space: pre;
+  transition: font-size 0.2s ease;
 }
 
 .sidebar__divider {
@@ -104,8 +259,8 @@ select,
 }
 
 .sidebar__actions > div:first-child {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -115,13 +270,21 @@ select,
   border: 1px solid rgba(255, 253, 253, 0.24);
   outline: none;
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease, border-color 0.12s ease;
+  transition: transform 0.12s ease,
+              box-shadow 0.12s ease,
+              opacity 0.12s ease,
+              border-color 0.12s ease,
+              padding 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              gap 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              justify-content 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
-  width: 126px;
+  flex: 1;
+  max-width: 140px;
+  min-width: 80px;
   height: 75%;
-  min-width: 0;
   overflow: hidden;
 }
 
@@ -164,12 +327,20 @@ select,
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  transition: font-size 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              flex 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              min-width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .button-icon {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              flex 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar__action--claude .button-icon {
@@ -197,19 +368,24 @@ select,
   font-size: 0.7rem;
   color: var(--text-secondary);
   font-weight: 500;
+  transition: font-size 0.2s ease;
 }
 
 .sidebar__dir-input {
   flex: 1;
-  padding: 8px 12px;
+  padding: 6px 12px;
   background: #1a1a1a;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 5px;
   color: var(--text-primary);
   font-size: 0.75rem;
   font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease,
+              background 0.15s ease,
+              font-size 0.2s ease,
+              padding 0.2s ease;
   outline: none;
+  min-width: 0;
 }
 
 .sidebar__dir-input::placeholder {
@@ -226,15 +402,27 @@ select,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 6px;
   background: #1a1a1a;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 5px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease,
+              background 0.15s ease,
+              color 0.15s ease,
+              padding 0.2s ease,
+              width 0.2s ease,
+              height 0.2s ease;
   outline: none;
   flex-shrink: 0;
+  width: auto;
+  aspect-ratio: 1 / 1;
+}
+
+.sidebar__dir-browse svg {
+  display: block;
+  transition: width 0.2s ease, height 0.2s ease;
 }
 
 .sidebar__dir-browse:hover {
@@ -252,6 +440,86 @@ select,
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--text-secondary);
+}
+
+.sidebar__toggle {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  color: var(--text-secondary);
+  outline: none;
+  z-index: 10;
+}
+
+.sidebar__toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--text-primary);
+}
+
+.sidebar__toggle:active {
+  transform: scale(0.95);
+}
+
+.sidebar__toggle svg {
+  transition: transform 0.3s ease;
+}
+
+.sidebar__toggle--workspace {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+}
+
+/* ========== SIDEBAR RESIZER ========== */
+
+.sidebar-resizer {
+  width: 1px;
+  background: var(--sidebar-border);
+  cursor: ew-resize;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s ease,
+              width 0.2s ease,
+              margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Expand hit area with pseudo-element */
+.sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  right: -8px;
+  cursor: ew-resize;
+}
+
+.sidebar-resizer:hover {
+  background: rgba(255, 107, 53, 0.4);
+  width: 3px;
+}
+
+.sidebar-resizer.resizing {
+  background: rgba(255, 107, 53, 0.6);
+  width: 3px;
+}
+
+.sidebar.hidden + .sidebar-resizer {
+  margin-left: calc(-1px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ========== SESSION LIST ========== */
@@ -350,6 +618,7 @@ select,
   background: #252525;
   color: var(--text-secondary);
   white-space: nowrap;
+  transition: all 0.3s ease;
 }
 
 .session-item__status--running {
@@ -360,6 +629,43 @@ select,
 .session-item__status--exited {
   background: rgba(239, 68, 68, 0.15);
   color: #fca5a5;
+}
+
+/* Activity state animations - subtle and clean */
+@keyframes pulse-thinking {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes pulse-working {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.02); }
+}
+
+@keyframes pulse-responding {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+/* Thinking state - slow gentle pulse */
+.session-item__status--thinking {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  animation: pulse-thinking 2s ease-in-out infinite;
+}
+
+/* Working state - subtle scale pulse */
+.session-item__status--working {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fdba74;
+  animation: pulse-working 1.5s ease-in-out infinite;
+}
+
+/* Responding state - gentle fade */
+.session-item__status--responding {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c4b5fd;
+  animation: pulse-responding 1.8s ease-in-out infinite;
 }
 
 .session-item__delete {
