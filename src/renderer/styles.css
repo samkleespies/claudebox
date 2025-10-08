@@ -80,6 +80,8 @@ select,
 /* Responsive scaling for smaller sidebar widths */
 .sidebar {
   --sidebar-scale: 1;
+  /* Add container name for more specific queries */
+  container-name: sidebar;
 }
 
 /* Calculate scale based on sidebar width using CSS calc */
@@ -136,26 +138,33 @@ select,
 }
 
 .sidebar__action {
-  padding: 9px 9px;
+  /* layout tokens so we can animate cleanly */
+  --btn-pad: 9px;
+  --btn-gap: 10px;
+  /* default icon width, overridden per-variant */
+  --icon-w: 20px;
+
+  padding: var(--btn-pad) var(--btn-pad);
+  /* reserve space for icon + gap when text is visible */
+  padding-left: calc(var(--btn-pad) + var(--icon-w) + var(--btn-gap));
   border-radius: 5px;
   border: 1px solid rgba(255, 253, 253, 0.24);
   outline: none;
   cursor: pointer;
   transition: transform 0.12s ease,
               box-shadow 0.12s ease,
-              opacity 0.12s ease,
               border-color 0.12s ease,
-              padding 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              gap 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+              padding 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: var(--btn-gap);
   flex: 1;
   max-width: 140px;
   min-width: 0;
   height: 75%;
   overflow: hidden;
+  position: relative;
 }
 
 .sidebar__action:focus {
@@ -169,10 +178,12 @@ select,
 
 .sidebar__action--claude {
   background: #333333;
+  --icon-w: 20px;
 }
 
 .sidebar__action--codex {
   background: #333333;
+  --icon-w: 16px;
 }
 
 .sidebar__action:not(:disabled):hover {
@@ -196,29 +207,95 @@ select,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
-  transition: font-size 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.15s ease,
-              width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              flex 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              min-width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 1;
+  flex: 1 1 0%;
+  width: auto;
+  min-width: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Container query-based animations */
+@container sidebar (max-width: 250px) {
+  .sidebar__action {
+    /* remove reserved space; icon will center */
+    padding-left: var(--btn-pad);
+    gap: 0;
+    transition: gap 0.15s ease, padding-left 0.2s ease;
+  }
+
+  .sidebar__action span {
+    opacity: 0;
+    width: 0;
+    max-width: 0;
+    flex: 0 0 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    transition: opacity 0.15s ease,
+                width 0s ease 0.15s,
+                max-width 0s ease 0.15s,
+                flex 0s ease 0.15s;
+  }
+
+  /* Move icon smoothly to exact center using absolute positioning */
+  .sidebar__action .button-icon {
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
+                transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) 0.15s;
+  }
+
+  .sidebar__action--claude .button-icon {
+    /* Maintain subtle Y offset while centered */
+    transform: translate(-50%, calc(-50% + 1px));
+  }
+}
+
+/* Default (wide) state */
+@container sidebar (min-width: 251px) {
+  .sidebar__action {
+    gap: var(--btn-gap);
+    /* restore reserved space for icon + gap so text aligns */
+    padding-left: calc(var(--btn-pad) + var(--icon-w) + var(--btn-gap));
+    transition: gap 0.2s ease 0.2s, padding-left 0.2s ease 0.2s;
+  }
+
+  .sidebar__action span {
+    opacity: 1;
+    width: auto;
+    max-width: 100%;
+    flex: 1 1 0%;
+    transition: opacity 0.2s ease 0.2s,
+                width 0s ease,
+                max-width 0s ease,
+                flex 0s ease;
+  }
+
+  .sidebar__action .button-icon {
+    left: var(--btn-pad);
+    transform: translate(0, -50%);
+    transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar__action--claude .button-icon {
+    transform: translate(0, calc(-50% + 1px));
+  }
 }
 
 .button-icon {
-  width: 20px;
-  height: 20px;
+  width: var(--icon-w);
+  height: var(--icon-w);
   flex-shrink: 0;
   margin-left: 0;
   margin-right: 0;
-  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              flex 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              margin 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.sidebar__action--claude .button-icon {
-  transform: translateY(1px);
+  position: absolute;
+  top: 50%;
+  left: var(--btn-pad);
+  display: block;
+  /* Default transitions - refined within container queries */
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar__action--codex .button-icon {
@@ -353,6 +430,15 @@ select,
   position: fixed;
   bottom: 16px;
   left: 16px;
+  transform: translateX(-60px);
+  opacity: 0;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar__toggle--workspace.visible {
+  transform: translateX(0);
+  opacity: 1;
 }
 
 /* ========== SIDEBAR RESIZER ========== */
@@ -736,4 +822,3 @@ body.debug-mode .xterm .xterm-screen {
 }
 
 /* ========== RESPONSIVE ========== */
-

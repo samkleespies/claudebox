@@ -101,6 +101,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Windows 11 uses piecewise sRGB color curve while Linux/Mac use gamma 2.2.
+  // This causes minimumContrastRatio to calculate luminance differently and shift colors.
+  // On Windows, disable contrast adjustment to match Linux/Mac color rendering.
+  const isWindows = navigator.platform.toLowerCase().includes('win');
+
   const terminal = new Terminal({
     allowProposedApi: true,
     convertEol: true,
@@ -135,7 +140,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     cursorBlink: true,
     scrollback: 2000,
     smoothScrollDuration: 50,
-    minimumContrastRatio: 4.5,
+    // Disable contrast adjustment on Windows due to gamma/sRGB differences
+    minimumContrastRatio: isWindows ? 1 : 4.5,
     fontWeight: 300,
     fontWeightBold: 600,
   });
@@ -622,9 +628,19 @@ window.addEventListener('DOMContentLoaded', async () => {
   function toggleSidebar() {
     const isHidden = elements.sidebar.classList.toggle('hidden');
     if (isHidden) {
-      elements.sidebarToggleWorkspace.style.display = 'flex';
+      // Sidebar is hiding: wait for it to slide out, then show workspace button
+      setTimeout(() => {
+        elements.sidebarToggleWorkspace.style.display = 'flex';
+        // Force reflow to ensure display change is applied before animation
+        elements.sidebarToggleWorkspace.offsetHeight;
+        elements.sidebarToggleWorkspace.classList.add('visible');
+      }, 300); // Match sidebar transition duration
     } else {
-      elements.sidebarToggleWorkspace.style.display = 'none';
+      // Sidebar is showing: hide workspace button first, then show sidebar
+      elements.sidebarToggleWorkspace.classList.remove('visible');
+      setTimeout(() => {
+        elements.sidebarToggleWorkspace.style.display = 'none';
+      }, 200); // Match workspace button transition duration
     }
     // Refit terminal after sidebar animation completes
     setTimeout(() => fitAndNotify(), 300);
@@ -655,36 +671,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Helper function to check if text is truncated with ellipsis and fade it out
-  function updateButtonTextVisibility() {
-    const claudeButton = elements.newClaudeButton;
-    const codexButton = elements.newCodexButton;
-
-    const claudeSpan = claudeButton.querySelector('span');
-    const codexSpan = codexButton.querySelector('span');
-
-    if (!claudeSpan || !codexSpan) return;
-
-    // Check if either button's text is overflowing (has ellipsis)
-    const claudeOverflowing = claudeSpan.scrollWidth > claudeSpan.clientWidth;
-    const codexOverflowing = codexSpan.scrollWidth > codexSpan.clientWidth;
-    const anyOverflowing = claudeOverflowing || codexOverflowing;
-
-    // If either is overflowing, fade out both
-    if (anyOverflowing) {
-      claudeSpan.style.opacity = '0';
-      codexSpan.style.opacity = '0';
-    } else {
-      claudeSpan.style.opacity = '1';
-      codexSpan.style.opacity = '1';
-    }
-  }
+  // No longer needed - using CSS container queries instead
 
   // Double-click to reset sidebar width
   elements.sidebarResizer.addEventListener('dblclick', () => {
     elements.sidebar.style.width = `${DEFAULT_SIDEBAR_WIDTH}px`;
     updateAsciiLogoSize(DEFAULT_SIDEBAR_WIDTH);
-    updateButtonTextVisibility();
     fitAndNotify();
   });
 
@@ -713,64 +705,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     elements.sidebar.style.width = `${constrainedWidth}px`;
     updateAsciiLogoSize(constrainedWidth);
-    updateButtonTextVisibility();
-
-    // DEBUG: Show current width on the sidebar title (ALWAYS VISIBLE)
-    const titleElement = document.querySelector('.sidebar__title');
-    if (titleElement) {
-      titleElement.setAttribute('data-width', constrainedWidth + 'px');
-      if (!titleElement.style.position) {
-        titleElement.style.position = 'relative';
-        const widthDisplay = document.createElement('div');
-        widthDisplay.id = 'width-display';
-        widthDisplay.style.cssText = 'position: absolute; top: -20px; right: 0; background: red; color: white; padding: 2px 6px; font-size: 11px; font-family: monospace; border-radius: 3px; z-index: 1000;';
-        titleElement.appendChild(widthDisplay);
-      }
-      const widthDisplay = document.getElementById('width-display');
-      if (widthDisplay) {
-        widthDisplay.textContent = constrainedWidth + 'px';
-      }
-    }
-
-    // DEBUG: Log alignment info when sidebar is small
-    if (constrainedWidth <= 230) {
-      const codexButton = document.querySelector('.sidebar__action--codex');
-      const folderButton = elements.browseDirButton;
-      const inputGroup = document.querySelector('.sidebar__dir-input-group');
-      const actionsContainer = document.querySelector('.sidebar__actions > div:first-child');
-
-      if (codexButton && folderButton) {
-        const codexRect = codexButton.getBoundingClientRect();
-        const folderRect = folderButton.getBoundingClientRect();
-        const inputGroupRect = inputGroup.getBoundingClientRect();
-        const actionsRect = actionsContainer.getBoundingClientRect();
-
-        const codexData = {
-          width: codexRect.width.toFixed(2),
-          right: codexRect.right.toFixed(2),
-          rightEdgeRelative: (codexRect.right - elements.sidebar.getBoundingClientRect().left).toFixed(2)
-        };
-        const folderData = {
-          width: folderRect.width.toFixed(2),
-          height: folderRect.height.toFixed(2),
-          right: folderRect.right.toFixed(2),
-          rightEdgeRelative: (folderRect.right - elements.sidebar.getBoundingClientRect().left).toFixed(2)
-        };
-        const containerData = {
-          actionsWidth: actionsRect.width.toFixed(2),
-          inputGroupWidth: inputGroupRect.width.toFixed(2),
-          gap: (actionsRect.width - inputGroupRect.width).toFixed(2)
-        };
-        const misalignment = (folderRect.right - codexRect.right).toFixed(2);
-
-        console.log('[ALIGNMENT DEBUG @ ' + constrainedWidth + 'px]');
-        console.log('  Codex:', 'w=' + codexData.width + 'px', 'rightEdge=' + codexData.rightEdgeRelative + 'px');
-        console.log('  Folder:', 'w=' + folderData.width + 'px', 'h=' + folderData.height + 'px', 'rightEdge=' + folderData.rightEdgeRelative + 'px');
-        console.log('  Containers:', 'actions=' + containerData.actionsWidth + 'px', 'inputGroup=' + containerData.inputGroupWidth + 'px', 'gap=' + containerData.gap + 'px');
-        console.log('  Misalignment:', misalignment + 'px', misalignment < 0 ? '(too far left)' : misalignment > 0 ? '(too far right)' : '(perfect!)');
-      }
-    }
-
     fitAndNotify();
   });
 
