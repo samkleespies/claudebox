@@ -87,8 +87,6 @@ select,
   --sidebar-scale: 0.85;
 }
 
-/* ALL CONTAINER QUERY ANIMATIONS/RESIZING REMOVED FOR BUTTONS AND INPUTS */
-
 .sidebar__branding {
   display: flex;
   flex-direction: column;
@@ -110,7 +108,6 @@ select,
   color: #d77757;
   font-family: monospace;
   white-space: pre;
-  transition: font-size 0.2s ease;
 }
 
 .sidebar__divider {
@@ -216,7 +213,8 @@ select,
   transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
               height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
               flex 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              margin 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+              margin 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 .sidebar__action--claude .button-icon {

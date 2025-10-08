@@ -639,9 +639,26 @@ window.addEventListener('DOMContentLoaded', async () => {
   let startWidth = 0;
   const DEFAULT_SIDEBAR_WIDTH = 300;
 
+  // Helper function to update ASCII logo font size based on sidebar width
+  function updateAsciiLogoSize(width) {
+    const asciiLogo = document.querySelector('.ascii-logo');
+    if (!asciiLogo) return;
+
+    if (width <= 300) {
+      // Linear interpolation: 0.32rem at 300px, 0.2rem at 200px
+      // Formula: fontSize = 0.2 + (width - 200) * 0.0012
+      const fontSize = 0.2 + (width - 200) * 0.0012;
+      asciiLogo.style.fontSize = `${fontSize}rem`;
+    } else {
+      // Above 300px, keep at max size
+      asciiLogo.style.fontSize = '0.32rem';
+    }
+  }
+
   // Double-click to reset sidebar width
   elements.sidebarResizer.addEventListener('dblclick', () => {
     elements.sidebar.style.width = `${DEFAULT_SIDEBAR_WIDTH}px`;
+    updateAsciiLogoSize(DEFAULT_SIDEBAR_WIDTH);
     fitAndNotify();
   });
 
@@ -669,6 +686,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
 
     elements.sidebar.style.width = `${constrainedWidth}px`;
+    updateAsciiLogoSize(constrainedWidth);
 
     // DEBUG: Show current width on the sidebar title (ALWAYS VISIBLE)
     const titleElement = document.querySelector('.sidebar__title');
