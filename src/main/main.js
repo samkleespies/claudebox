@@ -308,6 +308,17 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('session:rename', (_event, { id, newTitle }) => {
+    const session = sessions.get(id);
+    if (!session) {
+      return;
+    }
+
+    session.title = newTitle;
+    log(`session ${id} renamed to "${newTitle}"`);
+    return { id, title: newTitle };
+  });
+
   // Window control handlers
   ipcMain.handle('window:minimize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);

@@ -58,6 +58,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     resize,
     terminate,
     dispose,
+    renameSession,
     onSessionData,
     onSessionExit,
     windowMinimize,
@@ -204,6 +205,69 @@ window.addEventListener('DOMContentLoaded', async () => {
       const title = document.createElement('p');
       title.className = 'session-item__title';
       title.textContent = session.title;
+
+      // Add double-click to rename functionality
+      title.addEventListener('dblclick', async (e) => {
+        e.stopPropagation();
+
+        const currentTitle = session.title;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentTitle;
+        input.className = 'session-item__title-input';
+        input.spellcheck = false;
+
+        // Set dynamic width based on text content
+        const measureText = (text) => {
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          context.font = getComputedStyle(input).font;
+          return Math.ceil(context.measureText(text || 'a').width);
+        };
+
+        const updateWidth = () => {
+          const textWidth = measureText(input.value);
+          input.style.width = `${textWidth}px`;
+        };
+
+        // Replace title with input
+        title.style.display = 'none';
+        titleWrapper.insertBefore(input, title);
+
+        // Set initial width after element is in DOM
+        updateWidth();
+
+        input.focus();
+        input.select();
+
+        // Update width as user types
+        input.addEventListener('input', updateWidth);
+
+        const finishEditing = async (save) => {
+          if (save && input.value.trim() && input.value !== currentTitle) {
+            const newTitle = input.value.trim();
+            try {
+              await renameSession(session.id, newTitle);
+              session.title = newTitle;
+              title.textContent = newTitle;
+            } catch (error) {
+              console.error('[renderer] Failed to rename session', error);
+              title.textContent = currentTitle;
+            }
+          }
+          input.remove();
+          title.style.display = '';
+        };
+
+        input.addEventListener('blur', () => finishEditing(true));
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            finishEditing(true);
+          } else if (event.key === 'Escape') {
+            finishEditing(false);
+          }
+        });
+      });
 
       titleWrapper.appendChild(icon);
       titleWrapper.appendChild(title);
@@ -606,6 +670,23 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     elements.sidebar.style.width = `${constrainedWidth}px`;
 
+    // DEBUG: Show current width on the sidebar title (ALWAYS VISIBLE)
+    const titleElement = document.querySelector('.sidebar__title');
+    if (titleElement) {
+      titleElement.setAttribute('data-width', constrainedWidth + 'px');
+      if (!titleElement.style.position) {
+        titleElement.style.position = 'relative';
+        const widthDisplay = document.createElement('div');
+        widthDisplay.id = 'width-display';
+        widthDisplay.style.cssText = 'position: absolute; top: -20px; right: 0; background: red; color: white; padding: 2px 6px; font-size: 11px; font-family: monospace; border-radius: 3px; z-index: 1000;';
+        titleElement.appendChild(widthDisplay);
+      }
+      const widthDisplay = document.getElementById('width-display');
+      if (widthDisplay) {
+        widthDisplay.textContent = constrainedWidth + 'px';
+      }
+    }
+
     // DEBUG: Log alignment info when sidebar is small
     if (constrainedWidth <= 230) {
       const codexButton = document.querySelector('.sidebar__action--codex');
@@ -619,26 +700,29 @@ window.addEventListener('DOMContentLoaded', async () => {
         const inputGroupRect = inputGroup.getBoundingClientRect();
         const actionsRect = actionsContainer.getBoundingClientRect();
 
+        const codexData = {
+          width: codexRect.width.toFixed(2),
+          right: codexRect.right.toFixed(2),
+          rightEdgeRelative: (codexRect.right - elements.sidebar.getBoundingClientRect().left).toFixed(2)
+        };
+        const folderData = {
+          width: folderRect.width.toFixed(2),
+          height: folderRect.height.toFixed(2),
+          right: folderRect.right.toFixed(2),
+          rightEdgeRelative: (folderRect.right - elements.sidebar.getBoundingClientRect().left).toFixed(2)
+        };
+        const containerData = {
+          actionsWidth: actionsRect.width.toFixed(2),
+          inputGroupWidth: inputGroupRect.width.toFixed(2),
+          gap: (actionsRect.width - inputGroupRect.width).toFixed(2)
+        };
+        const misalignment = (folderRect.right - codexRect.right).toFixed(2);
+
         console.log('[ALIGNMENT DEBUG @ ' + constrainedWidth + 'px]');
-        console.log('  Codex button:', {
-          width: codexRect.width,
-          left: codexRect.left,
-          right: codexRect.right,
-          rightEdgeRelative: codexRect.right - elements.sidebar.getBoundingClientRect().left
-        });
-        console.log('  Folder button:', {
-          width: folderRect.width,
-          height: folderRect.height,
-          left: folderRect.left,
-          right: folderRect.right,
-          rightEdgeRelative: folderRect.right - elements.sidebar.getBoundingClientRect().left
-        });
-        console.log('  Containers:', {
-          actionsWidth: actionsRect.width,
-          inputGroupWidth: inputGroupRect.width,
-          gap: actionsRect.width - inputGroupRect.width
-        });
-        console.log('  Misalignment:', (folderRect.right - codexRect.right).toFixed(2) + 'px');
+        console.log('  Codex:', 'w=' + codexData.width + 'px', 'rightEdge=' + codexData.rightEdgeRelative + 'px');
+        console.log('  Folder:', 'w=' + folderData.width + 'px', 'h=' + folderData.height + 'px', 'rightEdge=' + folderData.rightEdgeRelative + 'px');
+        console.log('  Containers:', 'actions=' + containerData.actionsWidth + 'px', 'inputGroup=' + containerData.inputGroupWidth + 'px', 'gap=' + containerData.gap + 'px');
+        console.log('  Misalignment:', misalignment + 'px', misalignment < 0 ? '(too far left)' : misalignment > 0 ? '(too far right)' : '(perfect!)');
       }
     }
 

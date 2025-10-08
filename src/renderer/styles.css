@@ -179,17 +179,20 @@ select,
 
   .sidebar__dir-input-group {
     gap: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    /* Make the group match the actions container width exactly */
+    width: calc(100% - 40px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
 
   .sidebar__dir-browse {
     padding: 3px !important;
-    min-width: 0 !important;
     /* Keep square shape: 12px icon + 6px padding (3px each side) + 2px border = 20px total */
     width: 20px !important;
     height: 20px !important;
     flex-shrink: 0 !important;
-    /* Push to align with right button: account for left button (50%) + gap (8px/2 = 4px) */
-    margin-left: calc(50% - 10px - 6px) !important;
   }
 
   .sidebar__dir-browse svg {
@@ -207,12 +210,6 @@ select,
   .sidebar__dir-label {
     font-size: 0.6rem !important;
   }
-
-  /* Keep sizes locked - only adjust if needed for alignment */
-}
-
-@container (max-width: 200px) {
-  /* Keep sizes locked from 230px breakpoint - input width shrinks naturally via flex */
 }
 
 .sidebar__branding {
@@ -581,6 +578,24 @@ select,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: text;
+}
+
+.session-item__title-input {
+  font-size: 0.6rem;
+  font-weight: 600;
+  margin: 0;
+  padding: 1px 2px;
+  line-height: 1;
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 107, 53, 0.5);
+  border-radius: 2px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+  max-width: 100%;
+  height: auto;
+  box-sizing: content-box;
 }
 
 .session-item__path {

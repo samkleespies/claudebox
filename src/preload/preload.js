@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('claudebox', {
   resize: (id, cols, rows) => invoke('session:resize', { id, cols, rows }),
   terminate: (id) => invoke('session:terminate', { id }),
   dispose: (id) => invoke('session:dispose', { id }),
+  renameSession: (id, newTitle) => invoke('session:rename', { id, newTitle }),
   onSessionData: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('session:data', listener);
