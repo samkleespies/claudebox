@@ -655,10 +655,36 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Helper function to check if text is truncated with ellipsis and fade it out
+  function updateButtonTextVisibility() {
+    const claudeButton = elements.newClaudeButton;
+    const codexButton = elements.newCodexButton;
+
+    const claudeSpan = claudeButton.querySelector('span');
+    const codexSpan = codexButton.querySelector('span');
+
+    if (!claudeSpan || !codexSpan) return;
+
+    // Check if either button's text is overflowing (has ellipsis)
+    const claudeOverflowing = claudeSpan.scrollWidth > claudeSpan.clientWidth;
+    const codexOverflowing = codexSpan.scrollWidth > codexSpan.clientWidth;
+    const anyOverflowing = claudeOverflowing || codexOverflowing;
+
+    // If either is overflowing, fade out both
+    if (anyOverflowing) {
+      claudeSpan.style.opacity = '0';
+      codexSpan.style.opacity = '0';
+    } else {
+      claudeSpan.style.opacity = '1';
+      codexSpan.style.opacity = '1';
+    }
+  }
+
   // Double-click to reset sidebar width
   elements.sidebarResizer.addEventListener('dblclick', () => {
     elements.sidebar.style.width = `${DEFAULT_SIDEBAR_WIDTH}px`;
     updateAsciiLogoSize(DEFAULT_SIDEBAR_WIDTH);
+    updateButtonTextVisibility();
     fitAndNotify();
   });
 
@@ -687,6 +713,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     elements.sidebar.style.width = `${constrainedWidth}px`;
     updateAsciiLogoSize(constrainedWidth);
+    updateButtonTextVisibility();
 
     // DEBUG: Show current width on the sidebar title (ALWAYS VISIBLE)
     const titleElement = document.querySelector('.sidebar__title');
