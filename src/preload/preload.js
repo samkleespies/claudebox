@@ -25,5 +25,7 @@ contextBridge.exposeInMainWorld('claudebox', {
   windowMaximize: () => invoke('window:maximize'),
   windowClose: () => invoke('window:close'),
   // Directory selection
-  selectDirectory: () => invoke('dialog:selectDirectory')
+  selectDirectory: () => invoke('dialog:selectDirectory'),
+  // External terminal
+  openExternalTerminal: (cwd) => invoke('terminal:open', { cwd })
 });

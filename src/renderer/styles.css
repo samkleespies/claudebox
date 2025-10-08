@@ -25,6 +25,8 @@ html, body {
   height: 100%;
   background: var(--workspace-bg);
   color: var(--text-primary);
+  /* Prevent horizontal scrollbars when collapsing workspace to zero width */
+  overflow-x: hidden;
 }
 
 body {
@@ -36,6 +38,8 @@ body {
   display: flex;
   width: 100%;
   height: 100%;
+  /* Extra guard to avoid any horizontal overflow at extreme sizes */
+  overflow-x: hidden;
 }
 
 /* Make interactive elements non-draggable */
@@ -64,6 +68,7 @@ select,
   padding: 24px 20px;
   gap: 12px;
   position: relative;
+  /* Managed via JS for snappy + predictable behavior */
   flex-shrink: 0;
   overflow: hidden;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
@@ -132,10 +137,24 @@ select,
   gap: 6px;
 }
 
-.sidebar__actions > div:first-child {
+.sidebar__actions > div {
   display: flex;
   justify-content: center;
   gap: 8px;
+}
+
+/* Ensure the Terminal row matches single column width and stays centered */
+.sidebar__actions-single {
+  /* total row width is 100%; buttons above share two columns with 8px gap */
+  width: 100%;
+  max-width: calc((100% - 8px) / 2);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.sidebar__actions-single .sidebar__action {
+  /* Fill the single-column wrapper width; keep existing max-width on buttons */
+  width: 100%;
 }
 
 .sidebar__action {
@@ -185,6 +204,16 @@ select,
 .sidebar__action--codex {
   background: #333333;
   --icon-w: 16px;
+}
+
+/* Terminal button variant: match sizing/appearance */
+.sidebar__action--terminal {
+  background: #333333;
+  --icon-w: 20px;
+}
+
+.sidebar__action--terminal:not(:disabled):hover {
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.18);
 }
 
 .sidebar__action:not(:disabled):hover {
@@ -396,17 +425,20 @@ select,
 
 .sidebar__toggle {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: 10px; /* closer to corner when scaled */
+  right: 10px;
   width: 32px;
   height: 32px;
-  background: rgba(255, 255, 255, 0.08);
+  background: transparent; /* fully transparent background */
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  --btn-scale: 0.5; /* visible scale for both toggles */
+  transform: scale(var(--btn-scale));
+  transform-origin: bottom right;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
   color: var(--text-secondary);
   outline: none;
@@ -414,13 +446,13 @@ select,
 }
 
 .sidebar__toggle:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: transparent; /* keep transparent on hover */
   border-color: rgba(255, 255, 255, 0.25);
   color: var(--text-primary);
 }
 
 .sidebar__toggle:active {
-  transform: scale(0.95);
+  transform: scale(calc(var(--btn-scale) * 0.95));
 }
 
 .sidebar__toggle svg {
@@ -431,14 +463,17 @@ select,
   position: fixed;
   bottom: 16px;
   left: 16px;
-  transform: translateX(-60px);
+  z-index: 1001; /* ensure above terminal/xterm canvas */
+  pointer-events: auto;
+  transform: translateX(-60px) scale(var(--btn-scale));
+  transform-origin: bottom left;
   opacity: 0;
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar__toggle--workspace.visible {
-  transform: translateX(0);
+  transform: translateX(0) scale(var(--btn-scale));
   opacity: 1;
 }
 
@@ -451,7 +486,7 @@ select,
   position: relative;
   flex-shrink: 0;
   transition: background 0.2s ease,
-              width 0.2s ease,
+              box-shadow 0.2s ease,
               margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -469,16 +504,22 @@ select,
 
 .sidebar-resizer:hover {
   background: rgba(255, 107, 53, 0.4);
-  width: 3px;
+  box-shadow: -1px 0 0 0 rgba(255, 107, 53, 0.4),
+              1px 0 0 0 rgba(255, 107, 53, 0.4);
 }
 
 .sidebar-resizer.resizing {
   background: rgba(255, 107, 53, 0.6);
-  width: 3px;
+  box-shadow: -1px 0 0 0 rgba(255, 107, 53, 0.6),
+              1px 0 0 0 rgba(255, 107, 53, 0.6);
 }
 
 .sidebar.hidden + .sidebar-resizer {
-  margin-left: calc(-1px);
+  /* When the sidebar is hidden, completely remove the resizer from layout
+     so the workspace can truly span full width (avoids 1px gap/clip). */
+  width: 0;
+  flex-basis: 0;
+  margin-left: 0;
   opacity: 0;
   pointer-events: none;
 }
@@ -747,7 +788,8 @@ select,
 .terminal-host {
   flex: 1;
   height: 100%;
-  margin-right: -18px;
+  /* Avoid negative margin that can force horizontal overflow at tiny widths */
+  margin-right: 0;
   padding-top: 2px;
 }
 

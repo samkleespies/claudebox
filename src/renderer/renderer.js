@@ -65,6 +65,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     windowMaximize,
     windowClose,
     selectDirectory,
+    openExternalTerminal,
   } = api;
 
   // Window control buttons
@@ -86,6 +87,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     sessionListEl: document.getElementById('sessionList'),
     newClaudeButton: document.getElementById('newClaude'),
     newCodexButton: document.getElementById('newCodex'),
+    newTerminalButton: document.getElementById('newTerminal'),
     sessionDirInput: document.getElementById('sessionDir'),
     browseDirButton: document.getElementById('browseDirBtn'),
     terminalHostEl: document.getElementById('terminal'),
@@ -182,6 +184,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   function setActionButtonsDisabled(disabled) {
     elements.newClaudeButton.disabled = disabled;
     elements.newCodexButton.disabled = disabled;
+    elements.newTerminalButton.disabled = disabled;
   }
 
   function renderSessionList() {
@@ -211,9 +214,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const icon = document.createElement('img');
       icon.className = 'session-item__icon';
-      icon.src = session.type === 'claude'
-        ? './images/claude-icon.svg'
-        : './images/gpt-icon.svg';
+      let iconSrc = './images/gpt-icon.svg';
+      if (session.type === 'claude') {
+        iconSrc = './images/claude-icon.svg';
+      } else if (session.type === 'terminal') {
+        iconSrc = './images/terminal-icon.svg';
+      }
+      icon.src = iconSrc;
       icon.alt = `${session.type} icon`;
 
       const title = document.createElement('p');
@@ -339,11 +346,11 @@ window.addEventListener('DOMContentLoaded', async () => {
       `;
       deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (session.status === 'running') {
-          await terminate(session.id);
+        try {
+          await dispose(session.id);
+        } finally {
+          removeSessionFromState(session.id);
         }
-        await dispose(session.id);
-        removeSessionFromState(session.id);
       });
 
       li.appendChild(meta);
@@ -379,17 +386,28 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Coalesce frequent fit requests (e.g., during sidebar drag) to one per frame
+  let fitPending = false;
   function fitAndNotify() {
-    try {
-      fitAddon.fit();
-    } catch (error) {
-      console.warn('[renderer] fit failed', error);
-    }
+    if (fitPending) return;
+    fitPending = true;
+    window.requestAnimationFrame(() => {
+      fitPending = false;
+      try {
+        fitAddon.fit();
+      } catch (error) {
+        // Silently ignore fit errors
+      }
 
-    const activeId = state.activeSessionId;
-    if (activeId) {
-      resize(activeId, terminal.cols, terminal.rows);
-    }
+      const activeId = state.activeSessionId;
+      if (activeId) {
+        try {
+          resize(activeId, terminal.cols, terminal.rows);
+        } catch (_) {
+          // ignore
+        }
+      }
+    });
   }
 
   function setActiveSession(id) {
@@ -550,7 +568,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function handleCreateSession(type) {
-    console.log('[renderer] creating session', type);
     setActionButtonsDisabled(true);
 
     try {
@@ -621,6 +638,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   elements.newClaudeButton.addEventListener('click', () => handleCreateSession('claude'));
   elements.newCodexButton.addEventListener('click', () => handleCreateSession('codex'));
+  elements.newTerminalButton.addEventListener('click', () => handleCreateSession('terminal'));
 
   // Directory browse button
   if (elements.browseDirButton && selectDirectory) {
@@ -638,24 +656,60 @@ window.addEventListener('DOMContentLoaded', async () => {
     const rect = elements.sidebar.getBoundingClientRect();
     elements.sidebar.style.setProperty('--sidebar-width', `${Math.round(rect.width)}px`);
 
-    const isHidden = elements.sidebar.classList.toggle('hidden');
-    if (isHidden) {
-      // Sidebar is hiding: wait for it to slide out, then show workspace button
+    const currentlyHidden = elements.sidebar.classList.contains('hidden');
+
+    const afterTransition = (el, fn, timeout = 350) => {
+      let called = false;
+      const handler = (ev) => {
+        // Ensure we respond to the transition on the element itself
+        if (ev.currentTarget !== el) return;
+        if (called) return;
+        called = true;
+        el.removeEventListener('transitionend', handler);
+        fn();
+      };
+      el.addEventListener('transitionend', handler);
+      // Fallback in case transitionend doesn't fire
       setTimeout(() => {
+        if (called) return;
+        called = true;
+        el.removeEventListener('transitionend', handler);
+        fn();
+      }, timeout);
+    };
+
+    if (!currentlyHidden) {
+      // Hiding: collapse width smoothly via CSS; resizer auto collapses via CSS rule
+      elements.sidebar.classList.add('hidden');
+      afterTransition(elements.sidebar, () => {
+        // Show floating workspace toggle
         elements.sidebarToggleWorkspace.style.display = 'flex';
-        // Force reflow to ensure display change is applied before animation
-        elements.sidebarToggleWorkspace.offsetHeight;
+        elements.sidebarToggleWorkspace.offsetHeight; // reflow
         elements.sidebarToggleWorkspace.classList.add('visible');
-      }, 300); // Match sidebar transition duration
+        fitAndNotify();
+      });
     } else {
-      // Sidebar is showing: hide workspace button first, then show sidebar
-      elements.sidebarToggleWorkspace.classList.remove('visible');
-      setTimeout(() => {
-        elements.sidebarToggleWorkspace.style.display = 'none';
-      }, 200); // Match workspace button transition duration
+      // Showing: when the floating restore button is clicked, animate it out
+      // in reverse while the sidebar slides back in.
+      const btn = elements.sidebarToggleWorkspace;
+      if (btn && btn.style.display !== 'none') {
+        // Start reverse animation (slide left + fade out)
+        btn.classList.remove('visible');
+        // After its own transition completes, remove from flow
+        const onBtnEnd = (ev) => {
+          if (ev.target !== btn) return;
+          btn.removeEventListener('transitionend', onBtnEnd);
+          btn.style.display = 'none';
+        };
+        btn.addEventListener('transitionend', onBtnEnd, { once: true });
+      }
+
+      // Slide the sidebar back in
+      elements.sidebar.classList.remove('hidden');
+      afterTransition(elements.sidebar, () => {
+        fitAndNotify();
+      });
     }
-    // Refit terminal after sidebar animation completes
-    setTimeout(() => fitAndNotify(), 300);
   }
 
   elements.sidebarToggle.addEventListener('click', toggleSidebar);
@@ -666,6 +720,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   let startX = 0;
   let startWidth = 0;
   const DEFAULT_SIDEBAR_WIDTH = 300;
+  const MIN_SIDEBAR_WIDTH = 200;
+  const MAX_SIDEBAR_WIDTH = 600;
+  let preferredSidebarWidth = elements.sidebar.offsetWidth || DEFAULT_SIDEBAR_WIDTH;
 
   // Helper function to update ASCII logo font size based on sidebar width
   function updateAsciiLogoSize(width) {
@@ -683,14 +740,23 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Unified setter: used by both manual drag and window-driven adjustments
+  function setSidebarWidth(nextWidth, persistPreferred = true) {
+    const clamped = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, Math.round(nextWidth)));
+    if (persistPreferred) {
+      preferredSidebarWidth = clamped;
+    }
+    elements.sidebar.style.width = `${clamped}px`;
+    elements.sidebar.style.setProperty('--sidebar-width', `${clamped}px`);
+    updateAsciiLogoSize(clamped);
+    fitAndNotify();
+  }
+
   // No longer needed - using CSS container queries instead
 
   // Double-click to reset sidebar width
   elements.sidebarResizer.addEventListener('dblclick', () => {
-    elements.sidebar.style.width = `${DEFAULT_SIDEBAR_WIDTH}px`;
-    elements.sidebar.style.setProperty('--sidebar-width', `${DEFAULT_SIDEBAR_WIDTH}px`);
-    updateAsciiLogoSize(DEFAULT_SIDEBAR_WIDTH);
-    fitAndNotify();
+    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH, true);
   });
 
   elements.sidebarResizer.addEventListener('mousedown', (e) => {
@@ -712,14 +778,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     const newWidth = startWidth + deltaX;
 
     // Constrain to min/max width
-    const minWidth = 200;
-    const maxWidth = 600;
-    const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+    const constrainedWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, newWidth));
 
-    elements.sidebar.style.width = `${constrainedWidth}px`;
-    elements.sidebar.style.setProperty('--sidebar-width', `${constrainedWidth}px`);
-    updateAsciiLogoSize(constrainedWidth);
-    fitAndNotify();
+    setSidebarWidth(constrainedWidth, true);
   });
 
   document.addEventListener('mouseup', () => {
@@ -729,6 +790,34 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     }
+  });
+
+  // Window-driven sidebar resize using the same code path as manual drag
+  // Immediate updates (fit is rAF-coalesced) for snappy behavior
+  window.addEventListener('resize', () => {
+    if (elements.sidebar.classList.contains('hidden')) {
+      elements.sidebarResizer.style.width = '0px';
+      elements.sidebarResizer.style.flexBasis = '0';
+      return;
+    }
+
+    const windowWidth = window.innerWidth;
+    const collapseResizer = windowWidth <= MIN_SIDEBAR_WIDTH + 1;
+    if (collapseResizer) {
+      elements.sidebarResizer.style.width = '0px';
+      elements.sidebarResizer.style.flexBasis = '0';
+      setSidebarWidth(MIN_SIDEBAR_WIDTH, true);
+      return;
+    }
+
+    // Normal case: keep resizer visible and set width to the min of preferred and available space
+    elements.sidebarResizer.style.width = '1px';
+    elements.sidebarResizer.style.flexBasis = '';
+
+    const resizerWidth = elements.sidebarResizer.offsetWidth || 1;
+    const available = Math.max(MIN_SIDEBAR_WIDTH, windowWidth - resizerWidth);
+    const target = Math.max(MIN_SIDEBAR_WIDTH, Math.min(preferredSidebarWidth, available));
+    setSidebarWidth(target, true);
   });
 
   disposerFns.push(onSessionData(({ id, data }) => {
