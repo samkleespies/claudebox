@@ -9,7 +9,7 @@
     "build:win": "npm run build && electron-builder --win portable",
     "build:mac": "npm run build && electron-builder --mac dmg",
     "lint": "echo \"No lint configured\"",
-    "postinstall": "patch-package"
+    "postinstall": "node -e \"if (process.platform === 'win32') { const patchPackage = require('patch-package'); }\" || echo 'Skipping patches on non-Windows'"
   },
   "keywords": [],
   "author": "",
