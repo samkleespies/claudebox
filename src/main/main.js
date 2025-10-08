@@ -1,25 +1,30 @@
 const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
 const path = require('path');
+const pty = require('@homebridge/node-pty-prebuilt-multiarch');
 
-// Force node-pty to use winpty instead of conpty (conpty.node was not built)
-process.env.FORCE_WINPTY = '1';
-// Try prebuilt version first, fall back to regular node-pty
-let pty;
-try {
-  pty = require('@homebridge/node-pty-prebuilt-multiarch');
-} catch {
-  pty = require('node-pty');
-}
+// Configuration constants
+const CLAUDE_COMMAND = 'claude --dangerously-skip-permissions';
+const CODEX_COMMAND = 'codex --dangerously-bypass-approvals-and-sandbox';
 
+// Window dimensions
+const DEFAULT_WINDOW_WIDTH = 1280;
+const DEFAULT_WINDOW_HEIGHT = 820;
+const MIN_WINDOW_WIDTH = 900;
+const MIN_WINDOW_HEIGHT = 600;
+
+// Terminal dimensions
+const DEFAULT_TERMINAL_COLS = 100;
+const DEFAULT_TERMINAL_ROWS = 30;
+const MIN_TERMINAL_COLS = 10;
+const MIN_TERMINAL_ROWS = 5;
+
+// Session management
 const sessions = new Map();
 let sessionCounter = 0;
 const sessionCounterByType = new Map([
   ['claude', 0],
   ['codex', 0],
 ]);
-
-const CLAUDE_COMMAND = 'claude --dangerously-skip-permissions';
-const CODEX_COMMAND = 'codex --dangerously-bypass-approvals-and-sandbox';
 
 const log = (...args) => console.log('[main]', ...args);
 const warn = (...args) => console.warn('[main]', ...args);
@@ -100,14 +105,16 @@ function createWindow() {
   const icon = nativeImage.createFromPath(iconPath);
 
   const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 900,
-    minHeight: 600,
+    width: DEFAULT_WINDOW_WIDTH,
+    height: DEFAULT_WINDOW_HEIGHT,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     title: 'ClaudeBox',
     icon: icon,
     frame: false,  // Remove default titlebar
     autoHideMenuBar: true,  // Hide the menu bar
+    show: false,  // Don't show until ready (prevents flash)
+    backgroundColor: '#0d0d0d',  // Match app background
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -118,7 +125,33 @@ function createWindow() {
   // Remove the menu bar completely
   mainWindow.setMenuBarVisibility(false);
 
+  // Register zoom keyboard shortcuts
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    // Handle Ctrl+Plus/Equals for zoom in
+    if (input.control && (input.key === '+' || input.key === '=') && input.type === 'keyDown') {
+      const currentZoom = mainWindow.webContents.getZoomLevel();
+      mainWindow.webContents.setZoomLevel(currentZoom + 0.5);
+      event.preventDefault();
+    }
+    // Handle Ctrl+Minus for zoom out
+    else if (input.control && input.key === '-' && input.type === 'keyDown') {
+      const currentZoom = mainWindow.webContents.getZoomLevel();
+      mainWindow.webContents.setZoomLevel(currentZoom - 0.5);
+      event.preventDefault();
+    }
+    // Handle Ctrl+0 for reset zoom
+    else if (input.control && input.key === '0' && input.type === 'keyDown') {
+      mainWindow.webContents.setZoomLevel(0);
+      event.preventDefault();
+    }
+  });
+
   registerDiagnostics(mainWindow);
+
+  // Show window when ready to prevent flash
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
 
   // In development, load from Vite dev server
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -168,7 +201,7 @@ function registerIpcHandlers() {
     log(`session:create requested (${type})`);
 
     try {
-      const initialSize = { cols: 100, rows: 30 };
+      const initialSize = { cols: DEFAULT_TERMINAL_COLS, rows: DEFAULT_TERMINAL_ROWS };
       const meta = buildSessionMetadata(type);
       const sessionCwd = cwd || process.cwd();
       const ptyProcess = spawnShell(meta.command, initialSize.cols, initialSize.rows, sessionCwd);
@@ -241,7 +274,7 @@ function registerIpcHandlers() {
     }
 
     try {
-      session.pty.resize(Math.max(10, cols), Math.max(5, rows));
+      session.pty.resize(Math.max(MIN_TERMINAL_COLS, cols), Math.max(MIN_TERMINAL_ROWS, rows));
     } catch (error) {
       warn(`resize failed for session ${id}`, error);
     }
@@ -330,6 +363,9 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   terminateAllSessions();
 });
+
+// Disable GPU process crash handling (common Windows issue with some drivers)
+app.disableHardwareAcceleration();
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') {

@@ -44,6 +44,7 @@ input,
 textarea,
 select,
 .session-list,
+.session-item,
 .terminal-host,
 .xterm {
   -webkit-app-region: no-drag;
@@ -279,6 +280,8 @@ select,
   justify-content: space-between;
   gap: 12px;
   transition: border-color 0.15s ease, background 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .session-item__meta {
@@ -319,6 +322,8 @@ select,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .session-item__status-column {

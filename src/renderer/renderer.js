@@ -2,82 +2,8 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-const SYSTEM_PREFIX = '\r\n[ClaudeBox] ';
 const API_POLL_INTERVAL_MS = 50;
 const API_TIMEOUT_MS = 5000;
-
-// Mock API for browser development/testing (when not in Electron)
-function createMockAPI() {
-  console.log('[renderer] Creating mock API for browser testing');
-  const mockSessions = new Map();
-  let sessionCounter = 0;
-
-  return {
-    createSession: async (type, cwd) => {
-      const id = `mock-session-${++sessionCounter}`;
-      const session = {
-        id,
-        type,
-        title: `${type === 'claude' ? 'Claude Code' : 'Codex'} · ${sessionCounter}`,
-        status: 'running',
-        command: type === 'claude' ? 'claude --dangerously-skip-permissions' : 'codex --dangerously-bypass-approvals-and-sandbox',
-        createdAt: new Date().toISOString(),
-        cwd: cwd || '/mock/path'
-      };
-      mockSessions.set(id, session);
-
-      // Simulate some output
-      setTimeout(() => {
-        const dataHandler = window._mockDataHandler;
-        if (dataHandler) {
-          dataHandler({ id, data: `\r\n[Mock ${type}] Session started in browser mode\r\n` });
-          dataHandler({ id, data: `[Mock ${type}] This is a mock session for UI testing\r\n` });
-          dataHandler({ id, data: `[Mock ${type}] In Electron, this would connect to real ${type}\r\n` });
-        }
-      }, 100);
-
-      return session;
-    },
-    listSessions: async () => Array.from(mockSessions.values()),
-    write: async (id, data) => {
-      console.log(`[mock] write to ${id}:`, data);
-    },
-    resize: async (id, cols, rows) => {
-      console.log(`[mock] resize ${id}:`, cols, rows);
-    },
-    terminate: async (id) => {
-      const session = mockSessions.get(id);
-      if (session) {
-        setTimeout(() => {
-          const exitHandler = window._mockExitHandler;
-          if (exitHandler) {
-            exitHandler({ id, exitCode: 0 });
-          }
-        }, 100);
-      }
-    },
-    dispose: async (id) => {
-      mockSessions.delete(id);
-    },
-    onSessionData: (callback) => {
-      window._mockDataHandler = callback;
-      return () => { window._mockDataHandler = null; };
-    },
-    onSessionExit: (callback) => {
-      window._mockExitHandler = callback;
-      return () => { window._mockExitHandler = null; };
-    },
-    // Mock window controls
-    windowMinimize: () => console.log('[mock] minimize'),
-    windowMaximize: () => console.log('[mock] maximize'),
-    windowClose: () => console.log('[mock] close'),
-    // Mock directory selection
-    selectDirectory: async () => {
-      const path = prompt('Enter directory path (mock mode):');
-      return path || null;
-    }
-  };
-}
 
 function waitForApi(timeoutMs = API_TIMEOUT_MS) {
   // If already available, return immediately
@@ -96,9 +22,7 @@ function waitForApi(timeoutMs = API_TIMEOUT_MS) {
 
       if (Date.now() - started > timeoutMs) {
         clearInterval(timer);
-        // In browser mode, use mock API instead of rejecting
-        console.warn('[renderer] Electron API not found, using mock API for browser testing');
-        resolve(createMockAPI());
+        reject(new Error('Electron API not available'));
       }
     }, API_POLL_INTERVAL_MS);
   });
@@ -204,7 +128,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     lineHeight: 1,
     cursorStyle: 'bar',
     cursorBlink: true,
-    scrollback: 5000,
+    scrollback: 2000,
     smoothScrollDuration: 50,
     minimumContrastRatio: 4.5,
     fontWeight: 300,
@@ -217,57 +141,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   terminal.blur(); // Don't focus terminal until a session starts
   window.requestAnimationFrame(() => fitAddon.fit());
 
-  // Debug mode toggle (Ctrl+Shift+D)
-  window.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-      document.body.classList.toggle('debug-mode');
-      const isDebug = document.body.classList.contains('debug-mode');
-      console.log(`Debug mode: ${isDebug ? 'ON' : 'OFF'}`);
-
-      if (isDebug) {
-        const terminalHost = elements.terminalHostEl;
-        const viewport = terminalHost.querySelector('.xterm-viewport');
-        const screen = terminalHost.querySelector('.xterm-screen');
-
-        console.log('=== TERMINAL LAYOUT DIAGNOSTICS ===');
-        console.log('terminal-host:', {
-          offsetWidth: terminalHost.offsetWidth,
-          clientWidth: terminalHost.clientWidth,
-          scrollWidth: terminalHost.scrollWidth
-        });
-
-        if (viewport) {
-          console.log('xterm-viewport:', {
-            offsetWidth: viewport.offsetWidth,
-            clientWidth: viewport.clientWidth,
-            scrollWidth: viewport.scrollWidth
-          });
-        }
-
-        if (screen) {
-          console.log('xterm-screen:', {
-            offsetWidth: screen.offsetWidth,
-            clientWidth: screen.clientWidth,
-            scrollWidth: screen.scrollWidth
-          });
-        }
-      }
-    }
-  });
-
   const state = {
     sessions: [],
     activeSessionId: null,
-    debugStartTime: Date.now(),
   };
 
   const disposerFns = [];
 
   const findSession = (id) => state.sessions.find((session) => session.id === id);
-
-  function setStatusBar(message, isError = false) {
-    // Status bar removed - keeping function for compatibility
-  }
 
   function updateEmptyState() {
     if (state.activeSessionId) {
@@ -382,10 +263,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  function updateWorkspaceHeader() {
-    // Header removed - this function is now a no-op
-  }
-
   function appendToSessionBuffer(id, data) {
     const session = findSession(id);
     if (!session) {
@@ -398,7 +275,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       terminal.write(data);
     } else {
       session.hasActivity = true;
-      renderSessionList();
+      updateActiveSessionUI();
     }
   }
 
@@ -424,14 +301,35 @@ window.addEventListener('DOMContentLoaded', async () => {
     state.activeSessionId = id;
     session.hasActivity = false;
 
+    // Update UI immediately for visual feedback
+    updateActiveSessionUI();
+
     terminal.reset();
     terminal.write(session.buffer || '');
     terminal.focus();
     fitAndNotify();
-    renderSessionList();
-    updateWorkspaceHeader();
     updateEmptyState();
-    setStatusBar(`${session.title} ready.`);
+  }
+
+  function updateActiveSessionUI() {
+    // Update active state classes without re-rendering entire list
+    const sessionItems = elements.sessionListEl.querySelectorAll('.session-item');
+    sessionItems.forEach((item, index) => {
+      const session = state.sessions[index];
+      if (!session) return;
+
+      if (session.id === state.activeSessionId) {
+        item.classList.add('active');
+        item.classList.remove('unread');
+      } else {
+        item.classList.remove('active');
+        if (session.hasActivity) {
+          item.classList.add('unread');
+        } else {
+          item.classList.remove('unread');
+        }
+      }
+    });
   }
 
   function addSession(sessionInfo) {
@@ -444,7 +342,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     state.sessions.push(session);
     renderSessionList();
     setActiveSession(session.id);
-    setStatusBar(`${session.title} started.`);
   }
 
   function removeSessionFromState(id) {
@@ -463,7 +360,6 @@ window.addEventListener('DOMContentLoaded', async () => {
       } else {
         terminal.reset();
         terminal.blur(); // Remove cursor when no sessions
-        updateWorkspaceHeader();
         updateEmptyState();
       }
     }
@@ -492,7 +388,38 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   const resizeObserver = new ResizeObserver(() => fitAndNotify());
   resizeObserver.observe(elements.terminalHostEl);
-  window.addEventListener('resize', () => fitAndNotify());
+
+  // Handle keyboard events for Ctrl+C copy and Ctrl+V paste support
+  terminal.attachCustomKeyEventHandler((event) => {
+    if (event.type === 'keydown' && event.ctrlKey) {
+      // Handle Ctrl+C: Copy when there's a selection
+      if (event.key === 'c') {
+        const selection = terminal.getSelection();
+        if (selection) {
+          // Copy to clipboard
+          navigator.clipboard.writeText(selection).catch(err => {
+            console.error('[renderer] Failed to copy to clipboard', err);
+          });
+          // Prevent the event from being sent to the terminal (preventing SIGTERM)
+          return false;
+        }
+      }
+      // Handle Ctrl+V: Paste from clipboard
+      else if (event.key === 'v') {
+        event.preventDefault();
+        navigator.clipboard.readText().then(text => {
+          if (text && state.activeSessionId) {
+            write(state.activeSessionId, text);
+          }
+        }).catch(err => {
+          console.error('[renderer] Failed to read from clipboard', err);
+        });
+        return false;
+      }
+    }
+    // Allow all other key events to be processed normally
+    return true;
+  });
 
   terminal.onData((data) => {
     const activeId = state.activeSessionId;
@@ -524,32 +451,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   disposerFns.push(onSessionData(({ id, data }) => {
-    // Debug: log all data for the first 30 seconds with hex dump
-    if (Date.now() - state.debugStartTime < 30000) {
-      const visible = data.replace(/\x1b/g, '\\x1b');
-      const hex = Array.from(data).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
-
-      // Always log if contains "bypass" or "Claude Code"
-      if (visible.includes('bypass') || visible.includes('Claude Code') || visible.includes('▐▛███▜▌')) {
-        console.log('[DATA-HEX]', hex.substring(0, 300));
-        console.log('[DATA-STR]', visible.substring(0, 200));
-      }
-    }
     appendToSessionBuffer(id, data);
   }));
 
-  disposerFns.push(onSessionExit(({ id, exitCode }) => {
+  disposerFns.push(onSessionExit(({ id }) => {
     const session = findSession(id);
     if (!session) {
       return;
     }
 
     renderSessionList();
-    updateWorkspaceHeader();
-
-    if (state.activeSessionId === id) {
-      setStatusBar(`${session.title} exited${session.exitCode != null ? ` with code ${session.exitCode}` : ''}.`);
-    }
   }));
 
   window.addEventListener('beforeunload', () => {
@@ -568,15 +479,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     const runningSessions = await listSessions();
     runningSessions.forEach((session) => addSession(session));
     if (runningSessions.length === 0) {
-      updateWorkspaceHeader();
       updateEmptyState();
     }
   } catch (error) {
     console.error('[renderer] Failed to load existing sessions', error);
-    setStatusBar('Unable to load existing sessions.', true);
   }
 
-  updateWorkspaceHeader();
   updateEmptyState();
-  setStatusBar('Ready.');
 });
