@@ -8,6 +8,7 @@
   --card-bg: #0d0d0d;
   --accent-claude: #ff6b35;
   --accent-codex: #5899ff;
+  --accent-terminal: #666666;
   --text-primary: #e8e8e8;
   --text-secondary: #888888;
   --success: #22c55e;
@@ -70,7 +71,7 @@ select,
   position: relative;
   /* Managed via JS for snappy + predictable behavior */
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible; /* Allow content to extend to bottom */
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   container-type: inline-size;
@@ -442,11 +443,12 @@ select,
 
 .sidebar__toggle {
   position: absolute;
-  bottom: 10px; /* closer to corner when scaled */
-  right: 10px;
+  bottom: 12px;
+  right: 12px;
   width: 32px;
   height: 32px;
-  background: transparent; /* fully transparent background */
+  background: rgba(13, 13, 13, 0.9); /* semi-transparent background for visibility */
+  backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   cursor: pointer;
@@ -459,7 +461,10 @@ select,
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
   color: var(--text-secondary);
   outline: none;
-  z-index: 10;
+  z-index: 15; /* Higher z-index to float above content */
+  pointer-events: auto;
+  /* Add subtle shadow for depth */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .sidebar__toggle:hover {
@@ -546,12 +551,47 @@ select,
 .session-list {
   list-style: none;
   margin: 0 -20px;
+  margin-bottom: -20px; /* Extend to bottom edge */
   padding: 0;
+  padding-bottom: 20px; /* Account for removed margin */
   display: flex;
   flex-direction: column;
   gap: 0;
   flex: 1;
   overflow-y: auto;
+  
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* Webkit scrollbar styling (Chrome, Safari, Edge) */
+.session-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.session-list::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.session-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  border: none;
+  -webkit-border-image: none;
+}
+
+.session-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.session-list::-webkit-scrollbar-button {
+  display: none;
+}
+
+.session-list::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .session-item {
@@ -747,6 +787,17 @@ select,
   color: #9dc3ff;
 }
 
+.session-item--terminal.active {
+  border-top-color: var(--accent-terminal);
+  border-bottom-color: var(--accent-terminal);
+  background: #141414;
+}
+
+.session-item--terminal.active .session-item__status {
+  background: rgba(102, 102, 102, 0.2);
+  color: #a0a0a0;
+}
+
 /* ========== WORKSPACE ========== */
 
 .workspace {
@@ -805,6 +856,7 @@ select,
 .terminal-host {
   flex: 1;
   height: 100%;
+  margin: 0 -14px 0 0;
 }
 
 .terminal-empty {
