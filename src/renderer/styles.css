@@ -116,6 +116,23 @@ select,
   color: #d77757;
   font-family: monospace;
   white-space: pre;
+  display: inline-block;
+}
+
+/* ASCII art animation styles */
+.ascii-logo .letter {
+  display: inline-block;
+  vertical-align: top;
+  white-space: pre;
+}
+
+@keyframes wave {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.ascii-logo .letter.animating {
+  animation: wave 0.45s ease-in-out;
 }
 
 .sidebar__divider {
@@ -788,9 +805,6 @@ select,
 .terminal-host {
   flex: 1;
   height: 100%;
-  /* Avoid negative margin that can force horizontal overflow at tiny widths */
-  margin-right: 0;
-  padding-top: 2px;
 }
 
 .terminal-empty {
@@ -863,5 +877,3 @@ body.debug-mode .xterm .xterm-viewport {
 body.debug-mode .xterm .xterm-screen {
   outline: 3px solid purple !important;
 }
-
-/* ========== RESPONSIVE ========== */

@@ -909,4 +909,63 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   updateEmptyState();
+
+  // ASCII art animation on boot
+  function initializeASCIIAnimation() {
+    const asciiLogo = document.querySelector('.ascii-logo');
+    if (!asciiLogo) return;
+
+    // Get the original ASCII art text
+    const claudeboxArt = [
+      " ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗██████╗  ██████╗ ██╗  ██╗",
+      "██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝██╔══██╗██╔═══██╗╚██╗██╔╝",
+      "██║     ██║     ███████║██║   ██║██║  ██║█████╗  ██████╔╝██║   ██║ ╚███╔╝ ",
+      "██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ██╔══██╗██║   ██║ ██╔██╗ ",
+      "╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗██████╔╝╚██████╔╝██╔╝ ██╗",
+      " ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝"
+    ];
+
+    // Split the art into individual letters (9 letters in "CLAUDEBOX")
+    const letterWidth = 8.25;
+    const letters = [];
+
+    // Clear existing content
+    asciiLogo.textContent = '';
+
+    for (let i = 0; i < 9; i++) {
+      const letterLines = claudeboxArt.map(line => {
+        const startIdx = i * letterWidth;
+        const endIdx = Math.min(startIdx + letterWidth, line.length);
+        return line.substring(startIdx, endIdx);
+      });
+
+      const letterElement = document.createElement('span');
+      letterElement.className = 'letter';
+      letterElement.textContent = letterLines.join('\n');
+      letters.push(letterElement);
+      asciiLogo.appendChild(letterElement);
+    }
+
+    // Wave animation function
+    function waveAnimation() {
+      letters.forEach((letter, index) => {
+        setTimeout(() => {
+          letter.classList.add('animating');
+
+          // Remove animation class after animation completes
+          setTimeout(() => {
+            letter.classList.remove('animating');
+          }, 450);
+        }, index * 100); // Stagger each letter by 100ms
+      });
+    }
+
+    // Start wave animation after a small delay
+    setTimeout(() => {
+      waveAnimation();
+    }, 500);
+  }
+
+  // Initialize ASCII animation on load
+  initializeASCIIAnimation();
 });
