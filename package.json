@@ -10,7 +10,8 @@
     "build:mac": "npm run build && electron-builder --mac dmg",
     "build:linux": "npm run build && electron-builder --linux",
     "clean": "node -e \"const fs = require('fs'); ['out', 'dist'].forEach(dir => fs.existsSync(dir) && fs.rmSync(dir, { recursive: true, force: true }))\" && echo \"Cleaned build directories\"",
-    "lint": "eslint src --ext .js"
+    "lint": "eslint src --ext .js",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [],
   "author": {
@@ -25,7 +26,6 @@
     "node-pty": "^1.0.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.1",
     "electron": "^27.3.11",
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.1",
@@ -77,7 +77,9 @@
         }
       ],
       "category": "public.app-category.developer-tools",
-      "artifactName": "ClaudeBox-${arch}.${ext}"
+      "artifactName": "ClaudeBox-${arch}.${ext}",
+      "icon": "src/renderer/assets/images/app-icon.icns",
+      "identity": null
     },
     "dmg": {
       "artifactName": "ClaudeBox-${arch}.dmg",
