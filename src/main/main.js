@@ -22,6 +22,7 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 // Configuration constants
 const CLAUDE_COMMAND = 'claude --dangerously-skip-permissions';
 const CODEX_COMMAND = 'codex --dangerously-bypass-approvals-and-sandbox';
+const OPENCODE_COMMAND = 'opencode';
 
 // Window dimensions
 const DEFAULT_WINDOW_WIDTH = 1280;
@@ -43,28 +44,24 @@ const MIN_TERMINAL_ROWS = 5;
 // Session management
 const sessions = new Map();
 let sessionCounter = 0;
-const sessionCounterByType = new Map([
-  ['claude', 0],
-  ['codex', 0],
-  ['terminal', 0],
-]);
 
 const log = (...args) => console.log('[main]', ...args);
 const warn = (...args) => console.warn('[main]', ...args);
 const reportError = (...args) => console.error('[main]', ...args);
 
 function buildSessionMetadata(type) {
-  if (!['claude', 'codex', 'terminal'].includes(type)) {
+  if (!['claude', 'codex', 'opencode', 'terminal'].includes(type)) {
     throw new Error(`Unsupported session type: ${type}`);
   }
 
-  const command = type === 'claude' ? CLAUDE_COMMAND : (type === 'codex' ? CODEX_COMMAND : null);
-  const labelBase = type === 'claude' ? 'Claude Code' : (type === 'codex' ? 'Codex' : 'Terminal');
-  const typeCount = (sessionCounterByType.get(type) ?? 0) + 1;
-  sessionCounterByType.set(type, typeCount);
+  const command = type === 'claude' ? CLAUDE_COMMAND :
+                  (type === 'codex' ? CODEX_COMMAND :
+                  (type === 'opencode' ? OPENCODE_COMMAND : null));
+  const title = type === 'claude' ? 'Claude Code' :
+                (type === 'codex' ? 'Codex' :
+                (type === 'opencode' ? 'OpenCode' : 'Terminal'));
 
   const id = `session-${Date.now()}-${++sessionCounter}`;
-  const title = `${labelBase} · ${typeCount}`;
 
   return { id, type, title, command };
 }
@@ -378,17 +375,10 @@ function registerIpcHandlers() {
       return;
     }
 
-    const sessionType = session.type;
     if (session.status === 'running') {
       terminateSession(session);
     }
     sessions.delete(id);
-
-    // Reset counter if no more sessions of this type exist
-    const hasRemainingOfType = Array.from(sessions.values()).some(s => s.type === sessionType);
-    if (!hasRemainingOfType) {
-      sessionCounterByType.set(sessionType, 0);
-    }
   });
 
   ipcMain.handle('session:rename', (_event, { id, newTitle }) => {

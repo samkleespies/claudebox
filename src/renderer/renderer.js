@@ -87,6 +87,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     sessionListEl: document.getElementById('sessionList'),
     newClaudeButton: document.getElementById('newClaude'),
     newCodexButton: document.getElementById('newCodex'),
+    newOpenCodeButton: document.getElementById('newOpenCode'),
     newTerminalButton: document.getElementById('newTerminal'),
     sessionDirInput: document.getElementById('sessionDir'),
     browseDirButton: document.getElementById('browseDirBtn'),
@@ -184,6 +185,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   function setActionButtonsDisabled(disabled) {
     elements.newClaudeButton.disabled = disabled;
     elements.newCodexButton.disabled = disabled;
+    elements.newOpenCodeButton.disabled = disabled;
     elements.newTerminalButton.disabled = disabled;
   }
 
@@ -217,6 +219,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       let iconSrc = './images/gpt-icon.svg';
       if (session.type === 'claude') {
         iconSrc = './images/claude-icon.svg';
+      } else if (session.type === 'opencode') {
+        iconSrc = './images/opencode-logo.svg';
       } else if (session.type === 'terminal') {
         iconSrc = './images/terminal-icon.svg';
       }
@@ -691,6 +695,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   elements.newClaudeButton.addEventListener('click', () => handleCreateSession('claude'));
   elements.newCodexButton.addEventListener('click', () => handleCreateSession('codex'));
+  elements.newOpenCodeButton.addEventListener('click', () => handleCreateSession('opencode'));
   elements.newTerminalButton.addEventListener('click', () => handleCreateSession('terminal'));
 
   // Directory browse button
