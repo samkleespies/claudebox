@@ -69,7 +69,7 @@
       "icon": "src/renderer/assets/images/app-icon.ico"
     },
     "nsis": {
-      "artifactName": "claudebox-${version}-setup.exe",
+      "artifactName": "claudebox-${version}-win-setup.exe",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
@@ -78,7 +78,7 @@
       "shortcutName": "ClaudeBox"
     },
     "portable": {
-      "artifactName": "claudebox-${version}-portable.exe"
+      "artifactName": "claudebox-${version}-win-portable.exe"
     },
     "mac": {
       "target": [
@@ -124,7 +124,7 @@
       ],
       "category": "Development",
       "icon": "src/renderer/assets/images/app-icon.png",
-      "artifactName": "claudebox_${version}.${ext}"
+      "artifactName": "claudebox-${version}-linux-${arch}.${ext}"
     }
   }
 }

@@ -63,7 +63,7 @@ You can then run `claudebox` from the terminal or launch it from your applicatio
 #### Alternative: Using the .deb package
 
 ```bash
-sudo apt install ./dist/claudebox_1.0.0.deb
+sudo apt install ./dist/claudebox-1.0.0-linux-amd64.deb
 ```
 
 #### Uninstall

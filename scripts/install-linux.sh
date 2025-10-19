@@ -8,8 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="$PROJECT_DIR/dist"
 
-# Find the AppImage
-APPIMAGE=$(find "$DIST_DIR" -name "claudebox*.AppImage" -type f | head -n 1)
+# Find the AppImage (matches claudebox-VERSION-linux-ARCH.AppImage)
+APPIMAGE=$(find "$DIST_DIR" -type f -name "claudebox-*-linux-*.AppImage" | head -n 1)
 
 if [ -z "$APPIMAGE" ]; then
     echo "Error: claudebox AppImage not found in $DIST_DIR"
