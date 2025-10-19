@@ -9,10 +9,10 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="$PROJECT_DIR/dist"
 
 # Find the AppImage
-APPIMAGE=$(find "$DIST_DIR" -name "ClaudeBox*.AppImage" -type f | head -n 1)
+APPIMAGE=$(find "$DIST_DIR" -name "claudebox*.AppImage" -type f | head -n 1)
 
 if [ -z "$APPIMAGE" ]; then
-    echo "Error: ClaudeBox AppImage not found in $DIST_DIR"
+    echo "Error: claudebox AppImage not found in $DIST_DIR"
     echo "Please run 'npm run build:linux' first"
     exit 1
 fi

@@ -96,11 +96,18 @@
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb"
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
       ],
       "category": "Development",
-      "icon": "src/renderer/assets/images/app-icon.png"
+      "icon": "src/renderer/assets/images/app-icon.png",
+      "artifactName": "claudebox_${version}.${ext}"
     }
   }
 }
