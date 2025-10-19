@@ -75,6 +75,46 @@ const warn = (...args) => console.warn('[main]', ...args);
 const reportError = (...args) => console.error('[main]', ...args);
 
 /**
+ * Get enhanced PATH with npm/nvm directories
+ * @returns {string} - Enhanced PATH string
+ */
+function getEnhancedPath() {
+  const homeDir = require('os').homedir();
+  const fs = require('fs');
+  const pathSeparator = process.platform === 'win32' ? ';' : ':';
+
+  const additionalPaths = [];
+
+  // Unix-like systems (Linux/macOS)
+  if (process.platform !== 'win32') {
+    const nvmPath = path.join(homeDir, '.nvm/versions/node');
+    const npmGlobalPath = path.join(homeDir, '.npm-global/bin');
+
+    additionalPaths.push(npmGlobalPath);
+
+    // Add all nvm node versions bin directories
+    if (fs.existsSync(nvmPath)) {
+      const nvmBinPaths = fs.readdirSync(nvmPath)
+        .map(version => path.join(nvmPath, version, 'bin'))
+        .filter(p => fs.existsSync(p));
+      additionalPaths.push(...nvmBinPaths);
+    }
+  }
+  // Windows
+  else {
+    const appDataPath = process.env.APPDATA;
+    if (appDataPath) {
+      const npmPath = path.join(appDataPath, 'npm');
+      if (fs.existsSync(npmPath)) {
+        additionalPaths.push(npmPath);
+      }
+    }
+  }
+
+  return [...additionalPaths, process.env.PATH || ''].filter(Boolean).join(pathSeparator);
+}
+
+/**
  * Check if a CLI tool is installed by attempting to run its version command
  * Uses caching to avoid repeated checks for better performance
  * @param {string} type - The session type (claude, codex, opencode)
@@ -94,15 +134,17 @@ async function checkToolInstalled(type, skipCache = false) {
     return cached;
   }
 
-  // Perform actual check
+  // Perform actual check with enhanced PATH
   return new Promise((resolve) => {
     const { exec } = require('child_process');
-    exec(config.checkCommand, { timeout: 5000 }, (error) => {
+    const env = { ...process.env, PATH: getEnhancedPath() };
+
+    exec(config.checkCommand, { timeout: 5000, env }, (error) => {
       const isInstalled = !error;
 
       // Cache the result
       toolInstallCache.set(type, isInstalled);
-      log(`Checked ${type} installation: ${isInstalled}`);
+      log(`Checked ${type} installation: ${isInstalled} (PATH: ${env.PATH.substring(0, 100)}...)`);
 
       resolve(isInstalled);
     });
@@ -123,9 +165,10 @@ async function installTool(type) {
 
   return new Promise((resolve) => {
     const { exec } = require('child_process');
+    const env = { ...process.env, PATH: getEnhancedPath() };
     log(`Installing ${config.displayName}...`);
 
-    exec(config.installCommand, { timeout: 300000 }, async (error, stdout, stderr) => {
+    exec(config.installCommand, { timeout: 300000, env }, async (error, stdout, stderr) => {
       if (error) {
         reportError(`Failed to install ${config.displayName}:`, error);
         resolve({
@@ -170,42 +213,10 @@ function buildSessionMetadata(type) {
 }
 
 function spawnShell(command, cols, rows, cwd) {
-  const env = { ...process.env };
-
-  // Add common node binary paths to PATH for CLIs installed via npm/nvm
-  const homeDir = require('os').homedir();
-  const fs = require('fs');
-  const pathSeparator = process.platform === 'win32' ? ';' : ':';
-
-  const additionalPaths = [];
-
-  // Unix-like systems (Linux/macOS)
-  if (process.platform !== 'win32') {
-    const nvmPath = path.join(homeDir, '.nvm/versions/node');
-    const npmGlobalPath = path.join(homeDir, '.npm-global/bin');
-
-    additionalPaths.push(npmGlobalPath);
-
-    // Add all nvm node versions bin directories
-    if (fs.existsSync(nvmPath)) {
-      const nvmBinPaths = fs.readdirSync(nvmPath)
-        .map(version => path.join(nvmPath, version, 'bin'))
-        .filter(p => fs.existsSync(p));
-      additionalPaths.push(...nvmBinPaths);
-    }
-  }
-  // Windows
-  else {
-    const appDataPath = process.env.APPDATA;
-    if (appDataPath) {
-      const npmPath = path.join(appDataPath, 'npm');
-      if (fs.existsSync(npmPath)) {
-        additionalPaths.push(npmPath);
-      }
-    }
-  }
-
-  env.PATH = [...additionalPaths, env.PATH || ''].filter(Boolean).join(pathSeparator);
+  const env = {
+    ...process.env,
+    PATH: getEnhancedPath()
+  };
 
   const workingDir = cwd || process.cwd();
   const shell = process.platform === 'win32'

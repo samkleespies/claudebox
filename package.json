@@ -9,6 +9,8 @@
     "build:win": "npm run build && electron-builder --win portable",
     "build:mac": "npm run build && electron-builder --mac dmg",
     "build:linux": "npm run build && electron-builder --linux",
+    "install:linux": "./scripts/install-linux.sh",
+    "uninstall:linux": "./scripts/uninstall-linux.sh",
     "clean": "node -e \"const fs = require('fs'); ['out', 'dist'].forEach(dir => fs.existsSync(dir) && fs.rmSync(dir, { recursive: true, force: true }))\" && echo \"Cleaned build directories\"",
     "lint": "eslint src --ext .js",
     "postinstall": "electron-builder install-app-deps"
