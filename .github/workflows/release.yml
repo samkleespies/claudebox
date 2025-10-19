@@ -29,13 +29,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
-          path: dist/claudebox_*.AppImage
+          path: dist/claudebox-*-linux-*.AppImage
 
       - name: Upload Deb
         uses: actions/upload-artifact@v4
         with:
           name: linux-deb
-          path: dist/claudebox_*.deb
+          path: dist/claudebox-*-linux-*.deb
 
   build-windows:
     runs-on: windows-latest
