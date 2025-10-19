@@ -67,31 +67,51 @@ const MIN_TERMINAL_ROWS = 5;
 const sessions = new Map();
 let sessionCounter = 0;
 
+// Tool installation cache - stores check results to avoid repeated checks
+const toolInstallCache = new Map();
+
 const log = (...args) => console.log('[main]', ...args);
 const warn = (...args) => console.warn('[main]', ...args);
 const reportError = (...args) => console.error('[main]', ...args);
 
 /**
  * Check if a CLI tool is installed by attempting to run its version command
+ * Uses caching to avoid repeated checks for better performance
  * @param {string} type - The session type (claude, codex, opencode)
+ * @param {boolean} skipCache - Force a fresh check, ignoring cache
  * @returns {Promise<boolean>} - True if the tool is installed, false otherwise
  */
-async function checkToolInstalled(type) {
+async function checkToolInstalled(type, skipCache = false) {
   if (type === 'terminal') return true; // Terminal is always available
 
   const config = TOOL_CONFIG[type];
   if (!config) return false;
 
+  // Check cache first (unless skipCache is true)
+  if (!skipCache && toolInstallCache.has(type)) {
+    const cached = toolInstallCache.get(type);
+    log(`Using cached result for ${type}: ${cached}`);
+    return cached;
+  }
+
+  // Perform actual check
   return new Promise((resolve) => {
     const { exec } = require('child_process');
     exec(config.checkCommand, { timeout: 5000 }, (error) => {
-      resolve(!error);
+      const isInstalled = !error;
+
+      // Cache the result
+      toolInstallCache.set(type, isInstalled);
+      log(`Checked ${type} installation: ${isInstalled}`);
+
+      resolve(isInstalled);
     });
   });
 }
 
 /**
  * Install a CLI tool using npm
+ * Clears the cache and re-checks installation after completion
  * @param {string} type - The session type (claude, codex, opencode)
  * @returns {Promise<{success: boolean, error?: string}>}
  */
@@ -105,7 +125,7 @@ async function installTool(type) {
     const { exec } = require('child_process');
     log(`Installing ${config.displayName}...`);
 
-    exec(config.installCommand, { timeout: 300000 }, (error, stdout, stderr) => {
+    exec(config.installCommand, { timeout: 300000 }, async (error, stdout, stderr) => {
       if (error) {
         reportError(`Failed to install ${config.displayName}:`, error);
         resolve({
@@ -114,7 +134,19 @@ async function installTool(type) {
         });
       } else {
         log(`Successfully installed ${config.displayName}`);
-        resolve({ success: true });
+
+        // Clear cache and verify installation
+        toolInstallCache.delete(type);
+        const verified = await checkToolInstalled(type, true);
+
+        if (verified) {
+          resolve({ success: true });
+        } else {
+          resolve({
+            success: false,
+            error: 'Installation completed but tool verification failed. You may need to restart the app.'
+          });
+        }
       }
     });
   });
@@ -353,9 +385,9 @@ function terminateAllSessions() {
 
 function registerIpcHandlers() {
   // Check if a tool is installed
-  ipcMain.handle('tool:checkInstalled', async (_event, { type }) => {
+  ipcMain.handle('tool:checkInstalled', async (_event, { type, skipCache = false }) => {
     try {
-      const installed = await checkToolInstalled(type);
+      const installed = await checkToolInstalled(type, skipCache);
       return { installed, toolConfig: TOOL_CONFIG[type] };
     } catch (error) {
       reportError('failed to check tool installation', error);

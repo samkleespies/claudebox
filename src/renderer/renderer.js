@@ -912,41 +912,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   elements.newOpenCodeButton.addEventListener('click', () => handleCreateSession('opencode'));
   elements.newTerminalButton.addEventListener('click', () => handleCreateSession('terminal'));
 
-  // Test installation dialog buttons
-  const testClaudeBtn = document.getElementById('testClaudeInstall');
-  const testCodexBtn = document.getElementById('testCodexInstall');
-  const testOpenCodeBtn = document.getElementById('testOpenCodeInstall');
-
-  if (testClaudeBtn) {
-    testClaudeBtn.addEventListener('click', () => {
-      showInstallDialog('Claude Code', 'claude', async () => {
-        alert('This is just a test! In a real scenario, Claude Code would be installed here.');
-      }, () => {
-        console.log('Installation cancelled');
-      });
-    });
-  }
-
-  if (testCodexBtn) {
-    testCodexBtn.addEventListener('click', () => {
-      showInstallDialog('Codex', 'codex', async () => {
-        alert('This is just a test! In a real scenario, Codex would be installed here.');
-      }, () => {
-        console.log('Installation cancelled');
-      });
-    });
-  }
-
-  if (testOpenCodeBtn) {
-    testOpenCodeBtn.addEventListener('click', () => {
-      showInstallDialog('OpenCode', 'opencode', async () => {
-        alert('This is just a test! In a real scenario, OpenCode would be installed here.');
-      }, () => {
-        console.log('Installation cancelled');
-      });
-    });
-  }
-
   // Directory browse button
   if (elements.browseDirButton && selectDirectory) {
     elements.browseDirButton.addEventListener('click', async () => {
