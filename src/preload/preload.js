@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld('claudebox', {
     ipcRenderer.on('session:exit', listener);
     return () => ipcRenderer.removeListener('session:exit', listener);
   },
+  // Tool installation
+  checkToolInstalled: (type) => invoke('tool:checkInstalled', { type }),
+  installTool: (type) => invoke('tool:install', { type }),
   // Window controls
   windowMinimize: () => invoke('window:minimize'),
   windowMaximize: () => invoke('window:maximize'),

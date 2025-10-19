@@ -24,6 +24,28 @@ const CLAUDE_COMMAND = 'claude --dangerously-skip-permissions';
 const CODEX_COMMAND = 'codex --dangerously-bypass-approvals-and-sandbox';
 const OPENCODE_COMMAND = 'opencode';
 
+// Tool installation configuration
+const TOOL_CONFIG = {
+  claude: {
+    checkCommand: 'claude --version',
+    installCommand: 'npm install -g @anthropic-ai/claude-code',
+    displayName: 'Claude Code',
+    package: '@anthropic-ai/claude-code'
+  },
+  codex: {
+    checkCommand: 'codex --version',
+    installCommand: 'npm install -g @openai/codex',
+    displayName: 'Codex',
+    package: '@openai/codex'
+  },
+  opencode: {
+    checkCommand: 'opencode --version',
+    installCommand: 'npm install -g opencode-ai@latest',
+    displayName: 'OpenCode',
+    package: 'opencode-ai'
+  }
+};
+
 // Window dimensions
 const DEFAULT_WINDOW_WIDTH = 1280;
 const DEFAULT_WINDOW_HEIGHT = 820;
@@ -48,6 +70,55 @@ let sessionCounter = 0;
 const log = (...args) => console.log('[main]', ...args);
 const warn = (...args) => console.warn('[main]', ...args);
 const reportError = (...args) => console.error('[main]', ...args);
+
+/**
+ * Check if a CLI tool is installed by attempting to run its version command
+ * @param {string} type - The session type (claude, codex, opencode)
+ * @returns {Promise<boolean>} - True if the tool is installed, false otherwise
+ */
+async function checkToolInstalled(type) {
+  if (type === 'terminal') return true; // Terminal is always available
+
+  const config = TOOL_CONFIG[type];
+  if (!config) return false;
+
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    exec(config.checkCommand, { timeout: 5000 }, (error) => {
+      resolve(!error);
+    });
+  });
+}
+
+/**
+ * Install a CLI tool using npm
+ * @param {string} type - The session type (claude, codex, opencode)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function installTool(type) {
+  const config = TOOL_CONFIG[type];
+  if (!config) {
+    return { success: false, error: 'Unknown tool type' };
+  }
+
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    log(`Installing ${config.displayName}...`);
+
+    exec(config.installCommand, { timeout: 300000 }, (error, stdout, stderr) => {
+      if (error) {
+        reportError(`Failed to install ${config.displayName}:`, error);
+        resolve({
+          success: false,
+          error: `Installation failed: ${error.message}\n${stderr}`
+        });
+      } else {
+        log(`Successfully installed ${config.displayName}`);
+        resolve({ success: true });
+      }
+    });
+  });
+}
 
 function buildSessionMetadata(type) {
   if (!['claude', 'codex', 'opencode', 'terminal'].includes(type)) {
@@ -281,8 +352,39 @@ function terminateAllSessions() {
 }
 
 function registerIpcHandlers() {
-  ipcMain.handle('session:create', (_event, { type, cwd }) => {
+  // Check if a tool is installed
+  ipcMain.handle('tool:checkInstalled', async (_event, { type }) => {
     try {
+      const installed = await checkToolInstalled(type);
+      return { installed, toolConfig: TOOL_CONFIG[type] };
+    } catch (error) {
+      reportError('failed to check tool installation', error);
+      return { installed: false, error: error.message };
+    }
+  });
+
+  // Install a tool
+  ipcMain.handle('tool:install', async (_event, { type }) => {
+    try {
+      const result = await installTool(type);
+      return result;
+    } catch (error) {
+      reportError('failed to install tool', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('session:create', async (_event, { type, cwd }) => {
+    try {
+      // Check if tool is installed first (skip for terminal)
+      if (type !== 'terminal') {
+        const installed = await checkToolInstalled(type);
+        if (!installed) {
+          const config = TOOL_CONFIG[type];
+          throw new Error(`TOOL_NOT_INSTALLED:${type}:${config?.displayName || type}`);
+        }
+      }
+
       const initialSize = { cols: DEFAULT_TERMINAL_COLS, rows: DEFAULT_TERMINAL_ROWS };
       const meta = buildSessionMetadata(type);
       const sessionCwd = cwd || process.cwd();
@@ -320,7 +422,6 @@ function registerIpcHandlers() {
       };
     } catch (error) {
       reportError('failed to create session', error);
-      dialog.showErrorBox('Failed to start session', error.message);
       throw error;
     }
   });

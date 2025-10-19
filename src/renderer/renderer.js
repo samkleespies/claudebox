@@ -61,6 +61,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     renameSession,
     onSessionData,
     onSessionExit,
+    checkToolInstalled,
+    installTool,
     windowMinimize,
     windowMaximize,
     windowClose,
@@ -624,6 +626,188 @@ window.addEventListener('DOMContentLoaded', async () => {
     renderSessionList();
   }
 
+  function showInstallDialog(toolName, toolType, onInstall, onCancel) {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    // Create modal dialog
+    const dialog = document.createElement('div');
+    dialog.className = 'install-dialog';
+    dialog.style.cssText = `
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      animation: slideUp 0.3s ease-out;
+    `;
+
+    const title = document.createElement('h2');
+    title.textContent = `Install ${toolName}?`;
+    title.style.cssText = `
+      margin: 0 0 16px 0;
+      color: #ff6b35;
+      font-size: 20px;
+      font-weight: 600;
+    `;
+
+    const message = document.createElement('p');
+    message.textContent = `${toolName} is not installed on your system. Would you like to install it now?`;
+    message.style.cssText = `
+      margin: 0 0 20px 0;
+      color: #e8e8e8;
+      line-height: 1.5;
+    `;
+
+    const installNote = document.createElement('p');
+    installNote.textContent = `This will run: npm install -g ${toolType === 'claude' ? '@anthropic-ai/claude-code' : toolType === 'codex' ? '@openai/codex' : 'opencode-ai@latest'}`;
+    installNote.style.cssText = `
+      margin: 0 0 20px 0;
+      color: #999;
+      font-size: 12px;
+      font-family: monospace;
+      background: #0d0d0d;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #333;
+    `;
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    `;
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = `
+      padding: 8px 16px;
+      background: #333;
+      color: #e8e8e8;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    `;
+    cancelBtn.onmouseover = () => cancelBtn.style.background = '#444';
+    cancelBtn.onmouseout = () => cancelBtn.style.background = '#333';
+
+    const installBtn = document.createElement('button');
+    installBtn.textContent = 'Install';
+    installBtn.style.cssText = `
+      padding: 8px 16px;
+      background: #ff6b35;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.2s;
+    `;
+    installBtn.onmouseover = () => installBtn.style.background = '#ff8555';
+    installBtn.onmouseout = () => installBtn.style.background = '#ff6b35';
+
+    const progressContainer = document.createElement('div');
+    progressContainer.style.cssText = `
+      display: none;
+      margin-top: 16px;
+    `;
+
+    const progressText = document.createElement('p');
+    progressText.textContent = 'Installing...';
+    progressText.style.cssText = `
+      color: #ff6b35;
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    `;
+
+    const progressBar = document.createElement('div');
+    progressBar.style.cssText = `
+      width: 100%;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      overflow: hidden;
+    `;
+
+    const progressFill = document.createElement('div');
+    progressFill.style.cssText = `
+      width: 0%;
+      height: 100%;
+      background: #ff6b35;
+      animation: progress 2s ease-in-out infinite;
+    `;
+
+    progressBar.appendChild(progressFill);
+    progressContainer.appendChild(progressText);
+    progressContainer.appendChild(progressBar);
+
+    cancelBtn.onclick = () => {
+      document.body.removeChild(overlay);
+      onCancel();
+    };
+
+    installBtn.onclick = async () => {
+      buttonContainer.style.display = 'none';
+      progressContainer.style.display = 'block';
+      progressFill.style.animation = 'progress 2s ease-in-out infinite';
+
+      await onInstall();
+
+      document.body.removeChild(overlay);
+    };
+
+    buttonContainer.appendChild(cancelBtn);
+    buttonContainer.appendChild(installBtn);
+
+    dialog.appendChild(title);
+    dialog.appendChild(message);
+    dialog.appendChild(installNote);
+    dialog.appendChild(buttonContainer);
+    dialog.appendChild(progressContainer);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Add animation keyframes
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes slideUp {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      @keyframes progress {
+        0% { transform: translateX(-100%); }
+        50% { transform: translateX(100%); }
+        100% { transform: translateX(100%); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   async function handleCreateSession(type) {
     setActionButtonsDisabled(true);
 
@@ -635,6 +819,36 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       console.error('[renderer] Failed to create session', error);
       const message = error?.message ?? 'Unknown error';
+
+      // Check if it's a tool not installed error
+      if (message.startsWith('TOOL_NOT_INSTALLED:')) {
+        const [, toolType, toolName] = message.split(':');
+
+        showInstallDialog(
+          toolName,
+          toolType,
+          async () => {
+            // Install the tool
+            try {
+              const result = await installTool(toolType);
+              if (result.success) {
+                alert(`${toolName} has been successfully installed! You can now start a session.`);
+              } else {
+                alert(`Failed to install ${toolName}: ${result.error}`);
+              }
+            } catch (installError) {
+              alert(`Failed to install ${toolName}: ${installError.message}`);
+            } finally {
+              setActionButtonsDisabled(false);
+            }
+          },
+          () => {
+            setActionButtonsDisabled(false);
+          }
+        );
+        return; // Don't re-enable buttons here, let the dialog handlers do it
+      }
+
       alert(`Could not start the session. ${message}`);
     } finally {
       setActionButtonsDisabled(false);
