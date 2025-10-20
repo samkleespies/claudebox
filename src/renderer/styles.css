@@ -222,17 +222,17 @@ select,
 
 .sidebar__action--codex {
   background: #333333;
-  --icon-w: 16px;
+  --icon-w: 20px;
 }
 
 .sidebar__action--opencode {
   background: #333333;
-  --icon-w: 16px;
+  --icon-w: 20px;
 }
 
 .sidebar__action--gemini {
   background: #333333;
-  --icon-w: 18px;
+  --icon-w: 20px;
 }
 
 /* Terminal button variant: match sizing/appearance */
@@ -363,11 +363,6 @@ select,
   /* Default transitions - refined within container queries */
   transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
               transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.sidebar__action--codex .button-icon {
-  width: 16px;
-  height: 16px;
 }
 
 .sidebar__dir-input-wrapper {
