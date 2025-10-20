@@ -48,7 +48,7 @@ const TOOL_CONFIG = {
   gemini: {
     checkCommand: 'gemini --version',
     installCommand: 'npm install -g @google/gemini-cli',
-    displayName: 'Gemini CLI',
+    displayName: 'Gemini',
     package: '@google/gemini-cli'
   }
 };
@@ -214,7 +214,7 @@ function buildSessionMetadata(type) {
   const title = type === 'claude' ? 'Claude Code' :
                 (type === 'codex' ? 'Codex' :
                 (type === 'opencode' ? 'OpenCode' :
-                (type === 'gemini' ? 'Gemini CLI' : 'Terminal')));
+                (type === 'gemini' ? 'Gemini' : 'Terminal')));
 
   const id = `session-${Date.now()}-${++sessionCounter}`;
 
