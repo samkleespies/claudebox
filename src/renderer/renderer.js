@@ -224,6 +224,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         iconSrc = './images/claude-icon.svg';
       } else if (session.type === 'opencode') {
         iconSrc = './images/opencode-logo.svg';
+      } else if (session.type === 'gemini') {
+        iconSrc = './images/gemini-icon.svg';
       } else if (session.type === 'terminal') {
         iconSrc = './images/terminal-icon.svg';
       }
