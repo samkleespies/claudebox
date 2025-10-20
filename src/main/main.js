@@ -23,7 +23,7 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 const CLAUDE_COMMAND = 'claude --dangerously-skip-permissions';
 const CODEX_COMMAND = 'codex --dangerously-bypass-approvals-and-sandbox';
 const OPENCODE_COMMAND = 'opencode';
-const GEMINI_COMMAND = 'gemini';
+const GEMINI_COMMAND = 'gemini --yolo';
 
 // Tool installation configuration
 const TOOL_CONFIG = {
