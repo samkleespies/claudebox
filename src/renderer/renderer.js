@@ -822,8 +822,15 @@ window.addEventListener('DOMContentLoaded', async () => {
       const message = error?.message ?? 'Unknown error';
 
       // Check if it's a tool not installed error
-      if (message.startsWith('TOOL_NOT_INSTALLED:')) {
-        const [, toolType, toolName] = message.split(':');
+      if (message.includes('TOOL_NOT_INSTALLED:')) {
+        // Extract the TOOL_NOT_INSTALLED part from the error message
+        const toolNotInstalledMatch = message.match(/TOOL_NOT_INSTALLED:([^:]+):(.+?)(?:\s|$)/);
+        if (!toolNotInstalledMatch) {
+          alert(`Could not start the session. ${message}`);
+          setActionButtonsDisabled(false);
+          return;
+        }
+        const [, toolType, toolName] = toolNotInstalledMatch;
 
         showInstallDialog(
           toolName,
