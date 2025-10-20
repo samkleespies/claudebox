@@ -90,6 +90,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     newClaudeButton: document.getElementById('newClaude'),
     newCodexButton: document.getElementById('newCodex'),
     newOpenCodeButton: document.getElementById('newOpenCode'),
+    newGeminiButton: document.getElementById('newGemini'),
     newTerminalButton: document.getElementById('newTerminal'),
     sessionDirInput: document.getElementById('sessionDir'),
     browseDirButton: document.getElementById('browseDirBtn'),
@@ -910,6 +911,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   elements.newClaudeButton.addEventListener('click', () => handleCreateSession('claude'));
   elements.newCodexButton.addEventListener('click', () => handleCreateSession('codex'));
   elements.newOpenCodeButton.addEventListener('click', () => handleCreateSession('opencode'));
+  elements.newGeminiButton.addEventListener('click', () => handleCreateSession('gemini'));
   elements.newTerminalButton.addEventListener('click', () => handleCreateSession('terminal'));
 
   // Directory browse button

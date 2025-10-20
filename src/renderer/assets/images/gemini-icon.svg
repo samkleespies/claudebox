@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="gemini-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4285F4;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#9C27B0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EA4335;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Gemini sparkle/star icon -->
+  <path fill="url(#gemini-gradient)" d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z"/>
+  <path fill="url(#gemini-gradient)" opacity="0.7" d="M19 5L19.8 7.2L22 8L19.8 8.8L19 11L18.2 8.8L16 8L18.2 7.2L19 5Z"/>
+  <path fill="url(#gemini-gradient)" opacity="0.7" d="M5 15L5.8 17.2L8 18L5.8 18.8L5 21L4.2 18.8L2 18L4.2 17.2L5 15Z"/>
+</svg>

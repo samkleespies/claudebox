@@ -23,6 +23,7 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 const CLAUDE_COMMAND = 'claude --dangerously-skip-permissions';
 const CODEX_COMMAND = 'codex --dangerously-bypass-approvals-and-sandbox';
 const OPENCODE_COMMAND = 'opencode';
+const GEMINI_COMMAND = 'gemini';
 
 // Tool installation configuration
 const TOOL_CONFIG = {
@@ -43,6 +44,12 @@ const TOOL_CONFIG = {
     installCommand: 'npm install -g opencode-ai@latest',
     displayName: 'OpenCode',
     package: 'opencode-ai'
+  },
+  gemini: {
+    checkCommand: 'gemini --version',
+    installCommand: 'npm install -g @google/gemini-cli',
+    displayName: 'Gemini CLI',
+    package: '@google/gemini-cli'
   }
 };
 
@@ -196,16 +203,18 @@ async function installTool(type) {
 }
 
 function buildSessionMetadata(type) {
-  if (!['claude', 'codex', 'opencode', 'terminal'].includes(type)) {
+  if (!['claude', 'codex', 'opencode', 'gemini', 'terminal'].includes(type)) {
     throw new Error(`Unsupported session type: ${type}`);
   }
 
   const command = type === 'claude' ? CLAUDE_COMMAND :
                   (type === 'codex' ? CODEX_COMMAND :
-                  (type === 'opencode' ? OPENCODE_COMMAND : null));
+                  (type === 'opencode' ? OPENCODE_COMMAND :
+                  (type === 'gemini' ? GEMINI_COMMAND : null)));
   const title = type === 'claude' ? 'Claude Code' :
                 (type === 'codex' ? 'Codex' :
-                (type === 'opencode' ? 'OpenCode' : 'Terminal'));
+                (type === 'opencode' ? 'OpenCode' :
+                (type === 'gemini' ? 'Gemini CLI' : 'Terminal')));
 
   const id = `session-${Date.now()}-${++sessionCounter}`;
 
