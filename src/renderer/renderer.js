@@ -677,7 +677,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     `;
 
     const installNote = document.createElement('p');
-    installNote.textContent = `This will run: npm install -g ${toolType === 'claude' ? '@anthropic-ai/claude-code' : toolType === 'codex' ? '@openai/codex' : 'opencode-ai@latest'}`;
+    const packageName = toolType === 'claude' ? '@anthropic-ai/claude-code' :
+                        toolType === 'codex' ? '@openai/codex' :
+                        toolType === 'gemini' ? '@google/gemini-cli' :
+                        'opencode-ai@latest';
+    installNote.textContent = `This will run: npm install -g ${packageName}`;
     installNote.style.cssText = `
       margin: 0 0 20px 0;
       color: #999;
