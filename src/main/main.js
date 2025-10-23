@@ -246,8 +246,26 @@ async function checkToolInstalled(type, skipCache = false) {
     const { exec } = require('child_process');
     const env = { ...process.env, PATH: getEnhancedPath() };
 
-    exec(config.checkCommand, { timeout: 5000, env }, (error) => {
-      const isInstalled = !error;
+    exec(config.checkCommand, { timeout: 5000, env }, (error, stdout, stderr) => {
+      let isInstalled = !error;
+
+      // Special validation for Gemini to ensure it's the Google AI CLI, not the Yandex screenshot tool
+      if (type === 'gemini' && !error) {
+        const output = (stdout + stderr).toLowerCase();
+        // Check if output contains indicators it's the Google Gemini AI CLI
+        // The Google CLI typically includes "gemini" or "google" or "@google" in version output
+        // The Yandex tool will have different output
+        const isGoogleGemini = output.includes('@google') ||
+                               output.includes('gemini-cli') ||
+                               output.includes('google') ||
+                               // Also accept if it just shows a version number (like "0.10.0")
+                               /^\d+\.\d+\.\d+/.test(output.trim());
+
+        if (!isGoogleGemini) {
+          log(`Found 'gemini' command but it doesn't appear to be Google's Gemini CLI (output: ${output.substring(0, 100)})`);
+          isInstalled = false;
+        }
+      }
 
       // Cache the result
       toolInstallCache.set(type, isInstalled);

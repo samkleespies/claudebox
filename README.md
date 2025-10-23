@@ -68,7 +68,7 @@ ClaudeBox provides a unified interface for running Claude Code, Codex, OpenCode,
   - Claude Code: `npm install -g @anthropics/claude-code`
   - Codex: Install from official repository
   - OpenCode: `npm install -g opencode`
-  - Gemini: `npm install -g gemini`
+  - Gemini: `npm install -g @google/gemini-cli`
 
 ### Quick Start
 
