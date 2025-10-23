@@ -1,6 +1,6 @@
 {
   "name": "claudebox",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -55,7 +55,8 @@
     "publish": {
       "provider": "github",
       "owner": "samkleespies",
-      "repo": "claudebox"
+      "repo": "claudebox",
+      "releaseType": "release"
     },
     "win": {
       "target": [
