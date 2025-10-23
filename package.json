@@ -1,12 +1,12 @@
 {
   "name": "claudebox",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
     "start": "electron-vite preview",
     "build": "electron-vite build",
-    "build:win": "npm run build && electron-builder --win nsis portable --publish never",
+    "build:win": "npm run build && electron-builder --win nsis --publish never",
     "build:mac": "npm run build && electron-builder --mac dmg --publish never",
     "build:linux": "npm run build && electron-builder --linux --publish never",
     "install:linux": "./scripts/install-linux.sh",
@@ -76,16 +76,13 @@
       "icon": "src/renderer/assets/images/app-icon.ico"
     },
     "nsis": {
-      "artifactName": "claudebox-${version}-win-setup.exe",
+      "artifactName": "claudebox-${version}-windows.exe",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "ClaudeBox"
-    },
-    "portable": {
-      "artifactName": "claudebox-${version}-win-portable.exe"
     },
     "mac": {
       "target": [
@@ -98,12 +95,12 @@
         }
       ],
       "category": "public.app-category.developer-tools",
-      "artifactName": "ClaudeBox-${arch}.${ext}",
+      "artifactName": "claudebox-${version}-macos-${arch}.${ext}",
       "icon": "src/renderer/assets/images/app-icon.icns",
       "identity": null
     },
     "dmg": {
-      "artifactName": "ClaudeBox-${arch}.dmg",
+      "artifactName": "claudebox-${version}-macos-${arch}.dmg",
       "title": "ClaudeBox ${version}",
       "contents": [
         {
@@ -125,17 +122,11 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64"
-          ]
         }
       ],
       "category": "Development",
       "icon": "src/renderer/assets/images/app-icon.png",
-      "artifactName": "claudebox-${version}-linux-${arch}.${ext}"
+      "artifactName": "claudebox-${version}-linux.${ext}"
     }
   }
 }
