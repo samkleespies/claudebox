@@ -185,6 +185,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     currentBranch: null,
     availableBranches: [],
     isGitRepo: false,
+    // Custom prompts state
+    customPrompts: [],
+    editingPromptIndex: null,
   };
 
   const disposerFns = [];
@@ -1413,6 +1416,388 @@ Please guide me through this process methodically and ask clarifying questions a
 
   // Initialize branch info on load
   updateBranchInfo();
+
+  // ========== CUSTOM PROMPTS MANAGEMENT ==========
+
+  const customPromptsModal = document.getElementById('customPromptsModal');
+  const promptEditorModal = document.getElementById('promptEditorModal');
+  const managePromptsBtn = document.getElementById('managePromptsBtn');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  const closeEditorBtn = document.getElementById('closeEditorBtn');
+  const addPromptBtn = document.getElementById('addPromptBtn');
+  const customPromptsList = document.getElementById('customPromptsList');
+  const customPromptsContainer = document.getElementById('customPromptsContainer');
+  const promptName = document.getElementById('promptName');
+  const promptDescription = document.getElementById('promptDescription');
+  const promptContent = document.getElementById('promptContent');
+  const savePromptBtn = document.getElementById('savePromptBtn');
+  const cancelPromptBtn = document.getElementById('cancelPromptBtn');
+  const editorModalTitle = document.getElementById('editorModalTitle');
+
+  /**
+   * Load custom prompts from storage
+   */
+  async function loadCustomPrompts() {
+    const { loadCustomPrompts } = window.claudebox || {};
+    if (!loadCustomPrompts) return;
+
+    try {
+      const { prompts } = await loadCustomPrompts();
+      state.customPrompts = prompts || [];
+      renderCustomPromptsInDropdown();
+      renderCustomPromptsList();
+    } catch (error) {
+      console.error('[renderer] Failed to load custom prompts', error);
+    }
+  }
+
+  /**
+   * Save custom prompts to storage
+   */
+  async function saveCustomPrompts() {
+    const { saveCustomPrompts } = window.claudebox || {};
+    if (!saveCustomPrompts) return;
+
+    try {
+      await saveCustomPrompts(state.customPrompts);
+    } catch (error) {
+      console.error('[renderer] Failed to save custom prompts', error);
+      alert('Failed to save custom prompts');
+    }
+  }
+
+  /**
+   * Render custom prompts in the quick prompts dropdown
+   */
+  function renderCustomPromptsInDropdown() {
+    customPromptsContainer.innerHTML = '';
+
+    if (state.customPrompts.length === 0) return;
+
+    // Add divider before custom prompts
+    const divider = document.createElement('div');
+    divider.className = 'prompts-divider';
+    customPromptsContainer.appendChild(divider);
+
+    state.customPrompts.forEach((prompt, index) => {
+      const promptItem = document.createElement('button');
+      promptItem.className = 'quick-prompt-item';
+      promptItem.setAttribute('data-custom-index', index);
+
+      const label = document.createElement('span');
+      label.className = 'quick-prompt-label';
+      label.textContent = prompt.name;
+
+      const desc = document.createElement('span');
+      desc.className = 'quick-prompt-desc';
+      desc.textContent = prompt.description;
+
+      promptItem.appendChild(label);
+      promptItem.appendChild(desc);
+
+      promptItem.addEventListener('click', () => {
+        if (state.activeSessionId) {
+          injectPromptToActiveSession(prompt.content);
+          closeQuickPromptsDropdown();
+        } else {
+          alert('Please select or create a session first');
+        }
+      });
+
+      customPromptsContainer.appendChild(promptItem);
+    });
+  }
+
+  /**
+   * Render custom prompts in the management modal
+   */
+  function renderCustomPromptsList() {
+    customPromptsList.innerHTML = '';
+
+    if (state.customPrompts.length === 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.style.padding = '20px';
+      emptyMsg.style.textAlign = 'center';
+      emptyMsg.style.color = 'var(--text-secondary)';
+      emptyMsg.style.fontSize = '0.75rem';
+      emptyMsg.textContent = 'No custom prompts yet. Click "Add New Prompt" to create one.';
+      customPromptsList.appendChild(emptyMsg);
+      return;
+    }
+
+    state.customPrompts.forEach((prompt, index) => {
+      const card = document.createElement('div');
+      card.className = 'custom-prompt-card';
+
+      const info = document.createElement('div');
+      info.className = 'custom-prompt-card__info';
+
+      const name = document.createElement('div');
+      name.className = 'custom-prompt-card__name';
+      name.textContent = prompt.name;
+
+      const desc = document.createElement('div');
+      desc.className = 'custom-prompt-card__desc';
+      desc.textContent = prompt.description;
+
+      info.appendChild(name);
+      info.appendChild(desc);
+
+      const actions = document.createElement('div');
+      actions.className = 'custom-prompt-card__actions';
+
+      // Edit button
+      const editBtn = document.createElement('button');
+      editBtn.className = 'custom-prompt-card__btn';
+      editBtn.title = 'Edit prompt';
+      editBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+      `;
+      editBtn.addEventListener('click', () => openEditPromptModal(index));
+
+      // Delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'custom-prompt-card__btn custom-prompt-card__btn--delete';
+      deleteBtn.title = 'Delete prompt';
+      deleteBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      `;
+      deleteBtn.addEventListener('click', () => deletePrompt(index));
+
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+
+      card.appendChild(info);
+      card.appendChild(actions);
+
+      customPromptsList.appendChild(card);
+    });
+  }
+
+  /**
+   * Open the management modal
+   */
+  function openManagePromptsModal() {
+    customPromptsModal.classList.remove('hidden');
+    renderCustomPromptsList();
+    closeQuickPromptsDropdown();
+  }
+
+  /**
+   * Close the management modal
+   */
+  function closeManagePromptsModal() {
+    customPromptsModal.classList.add('hidden');
+  }
+
+  /**
+   * Open the editor modal for adding a new prompt
+   */
+  function openAddPromptModal() {
+    state.editingPromptIndex = null;
+    editorModalTitle.textContent = 'Add Custom Prompt';
+    promptName.value = '';
+    promptDescription.value = '';
+    promptContent.value = '';
+    promptEditorModal.classList.remove('hidden');
+  }
+
+  /**
+   * Open the editor modal for editing an existing prompt
+   */
+  function openEditPromptModal(index) {
+    state.editingPromptIndex = index;
+    const prompt = state.customPrompts[index];
+    editorModalTitle.textContent = 'Edit Custom Prompt';
+    promptName.value = prompt.name;
+    promptDescription.value = prompt.description;
+    promptContent.value = prompt.content;
+    promptEditorModal.classList.remove('hidden');
+    closeManagePromptsModal();
+  }
+
+  /**
+   * Close the editor modal
+   */
+  function closeEditorModal() {
+    promptEditorModal.classList.add('hidden');
+    state.editingPromptIndex = null;
+  }
+
+  /**
+   * Save a prompt (add or edit)
+   */
+  async function savePrompt() {
+    const name = promptName.value.trim();
+    const description = promptDescription.value.trim();
+    const content = promptContent.value.trim();
+
+    if (!name || !description || !content) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    const prompt = { name, description, content };
+
+    if (state.editingPromptIndex !== null) {
+      // Edit existing
+      state.customPrompts[state.editingPromptIndex] = prompt;
+    } else {
+      // Add new
+      state.customPrompts.push(prompt);
+    }
+
+    await saveCustomPrompts();
+    renderCustomPromptsInDropdown();
+    renderCustomPromptsList();
+    closeEditorModal();
+    openManagePromptsModal();
+  }
+
+  /**
+   * Delete a prompt
+   */
+  async function deletePrompt(index) {
+    const prompt = state.customPrompts[index];
+    if (!confirm(`Are you sure you want to delete "${prompt.name}"?`)) {
+      return;
+    }
+
+    state.customPrompts.splice(index, 1);
+    await saveCustomPrompts();
+    renderCustomPromptsInDropdown();
+    renderCustomPromptsList();
+  }
+
+  // Event listeners for custom prompts
+  managePromptsBtn.addEventListener('click', openManagePromptsModal);
+  closeModalBtn.addEventListener('click', closeManagePromptsModal);
+  addPromptBtn.addEventListener('click', openAddPromptModal);
+  closeEditorBtn.addEventListener('click', closeEditorModal);
+  cancelPromptBtn.addEventListener('click', closeEditorModal);
+  savePromptBtn.addEventListener('click', savePrompt);
+
+  // Close modals when clicking overlay
+  customPromptsModal.querySelector('.modal__overlay').addEventListener('click', closeManagePromptsModal);
+  promptEditorModal.querySelector('.modal__overlay').addEventListener('click', closeEditorModal);
+
+  // Load custom prompts on init
+  loadCustomPrompts();
+
+  // ========== AUTO-UPDATE NOTIFICATION ==========
+
+  const updateNotification = document.getElementById('updateNotification');
+  const updateTitle = document.getElementById('updateTitle');
+  const updateMessage = document.getElementById('updateMessage');
+  const downloadUpdateBtn = document.getElementById('downloadUpdateBtn');
+  const dismissUpdateBtn = document.getElementById('dismissUpdateBtn');
+  const updateProgress = document.getElementById('updateProgress');
+  const updateProgressFill = document.getElementById('updateProgressFill');
+  const updateProgressText = document.getElementById('updateProgressText');
+
+  let currentUpdateVersion = null;
+
+  /**
+   * Show update notification
+   */
+  function showUpdateNotification(version, message) {
+    currentUpdateVersion = version;
+    updateTitle.textContent = 'Update Available';
+    updateMessage.textContent = message || `Version ${version} is ready to download`;
+    updateNotification.classList.remove('hidden');
+    updateProgress.classList.add('hidden');
+  }
+
+  /**
+   * Hide update notification
+   */
+  function hideUpdateNotification() {
+    updateNotification.classList.add('hidden');
+    currentUpdateVersion = null;
+  }
+
+  /**
+   * Show download progress
+   */
+  function showDownloadProgress(percent, transferred, total) {
+    updateProgress.classList.remove('hidden');
+    updateProgressFill.style.width = `${percent}%`;
+    const transferredMB = (transferred / 1024 / 1024).toFixed(1);
+    const totalMB = (total / 1024 / 1024).toFixed(1);
+    updateProgressText.textContent = `Downloading... ${Math.round(percent)}% (${transferredMB}MB / ${totalMB}MB)`;
+  }
+
+  /**
+   * Show update ready to install
+   */
+  function showUpdateReady(version) {
+    updateTitle.textContent = 'Update Ready';
+    updateMessage.textContent = `Version ${version} has been downloaded and is ready to install`;
+    downloadUpdateBtn.textContent = 'Restart & Install';
+    downloadUpdateBtn.onclick = async () => {
+      const { installUpdate } = window.claudebox || {};
+      if (installUpdate) {
+        await installUpdate();
+      }
+    };
+  }
+
+  // Handle update available event
+  const { onUpdateAvailable, onUpdateDownloaded, onUpdateProgress, onUpdateError } = window.claudebox || {};
+
+  if (onUpdateAvailable) {
+    disposerFns.push(onUpdateAvailable(({ version }) => {
+      showUpdateNotification(version);
+    }));
+  }
+
+  if (onUpdateDownloaded) {
+    disposerFns.push(onUpdateDownloaded(({ version }) => {
+      showUpdateReady(version);
+    }));
+  }
+
+  if (onUpdateProgress) {
+    disposerFns.push(onUpdateProgress(({ percent, transferred, total }) => {
+      showDownloadProgress(percent, transferred, total);
+    }));
+  }
+
+  if (onUpdateError) {
+    disposerFns.push(onUpdateError(({ message }) => {
+      console.error('[renderer] Update error:', message);
+      alert(`Update error: ${message}`);
+      hideUpdateNotification();
+    }));
+  }
+
+  // Download update button
+  downloadUpdateBtn.addEventListener('click', async () => {
+    const { downloadUpdate } = window.claudebox || {};
+    if (!downloadUpdate) return;
+
+    try {
+      downloadUpdateBtn.disabled = true;
+      downloadUpdateBtn.textContent = 'Downloading...';
+      await downloadUpdate();
+    } catch (error) {
+      console.error('[renderer] Failed to download update', error);
+      alert(`Failed to download update: ${error.message}`);
+      downloadUpdateBtn.disabled = false;
+      downloadUpdateBtn.textContent = 'Download';
+    }
+  });
+
+  // Dismiss update button
+  dismissUpdateBtn.addEventListener('click', () => {
+    hideUpdateNotification();
+  });
 
   // Sidebar toggle functionality
   function toggleSidebar() {

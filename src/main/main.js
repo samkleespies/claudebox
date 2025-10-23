@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron')
 const path = require('path');
 const pty = require('@homebridge/node-pty-prebuilt-multiarch');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 // Configure caches and GPU behavior as early as possible
 try {
@@ -891,6 +892,36 @@ function registerIpcHandlers() {
     }
   });
 
+  // Custom prompts storage
+  const fs = require('fs');
+  const customPromptsPath = path.join(app.getPath('userData'), 'custom-prompts.json');
+
+  // Load custom prompts
+  ipcMain.handle('prompts:load', async () => {
+    try {
+      if (fs.existsSync(customPromptsPath)) {
+        const data = fs.readFileSync(customPromptsPath, 'utf8');
+        const prompts = JSON.parse(data);
+        return { prompts };
+      }
+      return { prompts: [] };
+    } catch (error) {
+      reportError('failed to load custom prompts', error);
+      return { prompts: [], error: error.message };
+    }
+  });
+
+  // Save custom prompts
+  ipcMain.handle('prompts:save', async (_event, { prompts }) => {
+    try {
+      fs.writeFileSync(customPromptsPath, JSON.stringify(prompts, null, 2), 'utf8');
+      return { success: true };
+    } catch (error) {
+      reportError('failed to save custom prompts', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // Git integration handlers
   ipcMain.handle('git:isRepo', async (_event, { cwd }) => {
     try {
@@ -946,6 +977,44 @@ function registerIpcHandlers() {
       return { success: false, error: error.message };
     }
   });
+
+  // Auto-updater handlers
+  ipcMain.handle('updater:checkForUpdates', async () => {
+    if (isDev) {
+      return { available: false, message: 'Updates disabled in development mode' };
+    }
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      return { available: !!result?.updateInfo, updateInfo: result?.updateInfo };
+    } catch (error) {
+      reportError('failed to check for updates', error);
+      return { available: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('updater:downloadUpdate', async () => {
+    if (isDev) {
+      return { success: false, message: 'Updates disabled in development mode' };
+    }
+    try {
+      await autoUpdater.downloadUpdate();
+      return { success: true };
+    } catch (error) {
+      reportError('failed to download update', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('updater:installUpdate', () => {
+    if (isDev) {
+      return;
+    }
+    autoUpdater.quitAndInstall();
+  });
+
+  ipcMain.handle('updater:getVersion', () => {
+    return { version: app.getVersion() };
+  });
 }
 
 app.on('window-all-closed', () => {
@@ -962,6 +1031,47 @@ app.on('before-quit', () => {
 // Disable GPU process crash handling (common Windows issue with some drivers)
 app.disableHardwareAcceleration();
 
+// Auto-updater configuration
+const isDev = !!process.env.ELECTRON_RENDERER_URL || process.env.NODE_ENV === 'development';
+
+// Disable auto-updater in development
+if (!isDev) {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    log('Checking for updates...');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    log('Update available:', info.version);
+    broadcast('update:available', { version: info.version, releaseNotes: info.releaseNotes });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    log('No updates available');
+    broadcast('update:not-available');
+  });
+
+  autoUpdater.on('error', (err) => {
+    reportError('Auto-updater error:', err);
+    broadcast('update:error', { message: err.message });
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    broadcast('update:download-progress', {
+      percent: progressObj.percent,
+      transferred: progressObj.transferred,
+      total: progressObj.total
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log('Update downloaded:', info.version);
+    broadcast('update:downloaded', { version: info.version });
+  });
+}
+
 app.whenReady().then(() => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.samkl.claudebox');
@@ -969,6 +1079,15 @@ app.whenReady().then(() => {
 
   createWindow();
   registerIpcHandlers();
+
+  // Check for updates on startup (production only)
+  if (!isDev) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        reportError('Failed to check for updates:', err);
+      });
+    }, 3000); // Wait 3 seconds after startup
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

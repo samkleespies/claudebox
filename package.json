@@ -1,6 +1,6 @@
 {
   "name": "claudebox",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -25,9 +25,10 @@
   "license": "MIT",
   "description": "Desktop UI for running Claude Code and Codex sessions.",
   "dependencies": {
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
-    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1"
+    "electron-updater": "^6.6.2"
   },
   "devDependencies": {
     "electron": "^27.3.11",
@@ -51,6 +52,11 @@
       "node_modules/@homebridge/node-pty-prebuilt-multiarch/**/*"
     ],
     "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "samkleespies",
+      "repo": "claudebox"
+    },
     "win": {
       "target": [
         {
@@ -115,11 +121,15 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Development",

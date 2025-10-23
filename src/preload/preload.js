@@ -34,6 +34,34 @@ contextBridge.exposeInMainWorld('claudebox', {
   openExternalTerminal: (cwd) => invoke('terminal:open', { cwd }),
   // System
   getUserHome: () => invoke('system:getUserHome'),
+  // Custom prompts
+  loadCustomPrompts: () => invoke('prompts:load'),
+  saveCustomPrompts: (prompts) => invoke('prompts:save', { prompts }),
+  // Auto-updater
+  checkForUpdates: () => invoke('updater:checkForUpdates'),
+  downloadUpdate: () => invoke('updater:downloadUpdate'),
+  installUpdate: () => invoke('updater:installUpdate'),
+  getAppVersion: () => invoke('updater:getVersion'),
+  onUpdateAvailable: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('update:available', listener);
+    return () => ipcRenderer.removeListener('update:available', listener);
+  },
+  onUpdateDownloaded: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('update:downloaded', listener);
+    return () => ipcRenderer.removeListener('update:downloaded', listener);
+  },
+  onUpdateProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('update:download-progress', listener);
+    return () => ipcRenderer.removeListener('update:download-progress', listener);
+  },
+  onUpdateError: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('update:error', listener);
+    return () => ipcRenderer.removeListener('update:error', listener);
+  },
   // Git integration
   gitIsRepo: (cwd) => invoke('git:isRepo', { cwd }),
   gitGetCurrentBranch: (cwd) => invoke('git:getCurrentBranch', { cwd }),
