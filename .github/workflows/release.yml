@@ -25,7 +25,7 @@ jobs:
         run: npm ci
 
       - name: Build and publish Linux
-        run: npm run build && electron-builder --linux --publish always
+        run: npm run build && npx electron-builder --linux --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -48,7 +48,7 @@ jobs:
         run: npm ci
 
       - name: Build and publish Windows
-        run: npm run build && electron-builder --win nsis portable --publish always
+        run: npm run build && npx electron-builder --win nsis portable --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -71,6 +71,6 @@ jobs:
         run: npm ci
 
       - name: Build and publish macOS
-        run: npm run build && electron-builder --mac dmg --publish always
+        run: npm run build && npx electron-builder --mac dmg --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
