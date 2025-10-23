@@ -82,6 +82,105 @@ const warn = (...args) => console.warn('[main]', ...args);
 const reportError = (...args) => console.error('[main]', ...args);
 
 /**
+ * Git integration utilities
+ */
+
+/**
+ * Execute a git command in a specific directory
+ * @param {string} cwd - Working directory
+ * @param {string[]} args - Git command arguments
+ * @returns {Promise<{stdout: string, stderr: string}>}
+ */
+function execGit(cwd, args) {
+  return new Promise((resolve, reject) => {
+    const { exec } = require('child_process');
+    const command = `git ${args.join(' ')}`;
+
+    exec(command, { cwd, timeout: 10000 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr || error.message));
+        return;
+      }
+      resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+  });
+}
+
+/**
+ * Get the current git branch for a directory
+ * @param {string} cwd - Working directory
+ * @returns {Promise<string|null>} - Branch name or null if not a git repo
+ */
+async function getCurrentBranch(cwd) {
+  try {
+    const { stdout } = await execGit(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    return stdout;
+  } catch (error) {
+    log('Failed to get current branch:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Get all git branches for a directory
+ * @param {string} cwd - Working directory
+ * @returns {Promise<string[]>} - Array of branch names
+ */
+async function getAllBranches(cwd) {
+  try {
+    const { stdout } = await execGit(cwd, ['branch', '--list', '--format=%(refname:short)']);
+    return stdout ? stdout.split('\n').filter(Boolean) : [];
+  } catch (error) {
+    log('Failed to get branches:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Create and checkout a new git branch
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Name of the new branch
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function createBranch(cwd, branchName) {
+  try {
+    await execGit(cwd, ['checkout', '-b', branchName]);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Checkout an existing git branch
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Name of the branch to checkout
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function checkoutBranch(cwd, branchName) {
+  try {
+    await execGit(cwd, ['checkout', branchName]);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Check if a directory is a git repository
+ * @param {string} cwd - Working directory
+ * @returns {Promise<boolean>}
+ */
+async function isGitRepo(cwd) {
+  try {
+    await execGit(cwd, ['rev-parse', '--git-dir']);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * Get enhanced PATH with npm/nvm directories
  * @returns {string} - Enhanced PATH string
  */
@@ -588,6 +687,149 @@ function registerIpcHandlers() {
     return result.filePaths[0];
   });
 
+  // Show input dialog for branch name
+  ipcMain.handle('dialog:getBranchName', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return null;
+    }
+
+    // Create a simple HTML dialog for text input
+    const inputWin = new BrowserWindow({
+      parent: win,
+      modal: true,
+      width: 400,
+      height: 180,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      frame: false,
+      autoHideMenuBar: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+
+    inputWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0d0d0d;
+            color: #e8e8e8;
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 40px);
+          }
+          h3 {
+            margin: 0 0 15px 0;
+            font-size: 14px;
+            font-weight: 500;
+          }
+          input {
+            width: 100%;
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 5px;
+            color: #e8e8e8;
+            font-size: 13px;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            box-sizing: border-box;
+          }
+          input:focus {
+            border-color: rgba(255, 107, 53, 0.5);
+          }
+          .buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: auto;
+          }
+          button {
+            padding: 8px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 5px;
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+          }
+          button.primary {
+            background: rgba(255, 107, 53, 0.2);
+            border-color: rgba(255, 107, 53, 0.5);
+            color: #ffb89d;
+          }
+          button.primary:hover {
+            background: rgba(255, 107, 53, 0.3);
+          }
+          button.secondary {
+            background: #1a1a1a;
+            color: #e8e8e8;
+          }
+          button.secondary:hover {
+            background: #1f1f1f;
+          }
+        </style>
+      </head>
+      <body>
+        <h3>Enter branch name:</h3>
+        <input type="text" id="branchInput" placeholder="e.g., feature/my-new-feature" autofocus />
+        <div class="buttons">
+          <button class="secondary" onclick="cancel()">Cancel</button>
+          <button class="primary" onclick="submit()">Create Branch</button>
+        </div>
+        <script>
+          const { ipcRenderer } = require('electron');
+          const input = document.getElementById('branchInput');
+
+          input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+              submit();
+            } else if (e.key === 'Escape') {
+              cancel();
+            }
+          });
+
+          function submit() {
+            const value = input.value.trim();
+            if (value) {
+              ipcRenderer.send('branch-name-result', value);
+              window.close();
+            }
+          }
+
+          function cancel() {
+            ipcRenderer.send('branch-name-result', null);
+            window.close();
+          }
+        </script>
+      </body>
+      </html>
+    `)}`);
+
+    return new Promise((resolve) => {
+      const { ipcMain } = require('electron');
+
+      const resultHandler = (_event, branchName) => {
+        ipcMain.removeListener('branch-name-result', resultHandler);
+        resolve(branchName);
+      };
+
+      ipcMain.on('branch-name-result', resultHandler);
+
+      inputWin.on('closed', () => {
+        ipcMain.removeListener('branch-name-result', resultHandler);
+        resolve(null);
+      });
+    });
+  });
+
   // Open an external terminal window at a directory
   ipcMain.handle('terminal:open', async (_event, { cwd }) => {
     try {
@@ -634,6 +876,74 @@ function registerIpcHandlers() {
       reportError('failed to open external terminal', error);
       dialog.showErrorBox('Open Terminal Failed', error.message);
       throw error;
+    }
+  });
+
+  // Get user's home directory
+  ipcMain.handle('system:getUserHome', async () => {
+    try {
+      const os = require('os');
+      const homeDir = os.homedir();
+      return { path: homeDir };
+    } catch (error) {
+      reportError('failed to get user home directory', error);
+      return { path: null, error: error.message };
+    }
+  });
+
+  // Git integration handlers
+  ipcMain.handle('git:isRepo', async (_event, { cwd }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const isRepo = await isGitRepo(targetDir);
+      return { isRepo };
+    } catch (error) {
+      reportError('failed to check if directory is git repo', error);
+      return { isRepo: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:getCurrentBranch', async (_event, { cwd }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const branch = await getCurrentBranch(targetDir);
+      return { branch };
+    } catch (error) {
+      reportError('failed to get current branch', error);
+      return { branch: null, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:getAllBranches', async (_event, { cwd }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const branches = await getAllBranches(targetDir);
+      return { branches };
+    } catch (error) {
+      reportError('failed to get branches', error);
+      return { branches: [], error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:createBranch', async (_event, { cwd, branchName }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const result = await createBranch(targetDir, branchName);
+      return result;
+    } catch (error) {
+      reportError('failed to create branch', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:checkoutBranch', async (_event, { cwd, branchName }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const result = await checkoutBranch(targetDir, branchName);
+      return result;
+    } catch (error) {
+      reportError('failed to checkout branch', error);
+      return { success: false, error: error.message };
     }
   });
 }

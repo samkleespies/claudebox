@@ -29,6 +29,15 @@ contextBridge.exposeInMainWorld('claudebox', {
   windowClose: () => invoke('window:close'),
   // Directory selection
   selectDirectory: () => invoke('dialog:selectDirectory'),
+  getBranchNameDialog: () => invoke('dialog:getBranchName'),
   // External terminal
-  openExternalTerminal: (cwd) => invoke('terminal:open', { cwd })
+  openExternalTerminal: (cwd) => invoke('terminal:open', { cwd }),
+  // System
+  getUserHome: () => invoke('system:getUserHome'),
+  // Git integration
+  gitIsRepo: (cwd) => invoke('git:isRepo', { cwd }),
+  gitGetCurrentBranch: (cwd) => invoke('git:getCurrentBranch', { cwd }),
+  gitGetAllBranches: (cwd) => invoke('git:getAllBranches', { cwd }),
+  gitCreateBranch: (cwd, branchName) => invoke('git:createBranch', { cwd, branchName }),
+  gitCheckoutBranch: (cwd, branchName) => invoke('git:checkoutBranch', { cwd, branchName })
 });

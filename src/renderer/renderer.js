@@ -100,6 +100,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     sidebarResizer: document.getElementById('sidebarResizer'),
     sidebarToggle: document.getElementById('sidebarToggle'),
     sidebarToggleWorkspace: document.getElementById('sidebarToggleWorkspace'),
+    // Branch selector elements
+    branchSelector: document.getElementById('branchSelector'),
+    branchName: document.getElementById('branchName'),
+    branchDropdown: document.getElementById('branchDropdown'),
+    branchList: document.getElementById('branchList'),
+    newBranchInput: document.getElementById('newBranchInput'),
+    createBranchBtn: document.getElementById('createBranchBtn'),
+    branchModeToggle: document.getElementById('branchModeToggle'),
+    // Quick prompts elements
+    quickPromptsBtn: document.getElementById('quickPromptsBtn'),
+    quickPromptsDropdown: document.getElementById('quickPromptsDropdown'),
   };
 
   if (!Object.values(elements).every(Boolean)) {
@@ -169,9 +180,96 @@ window.addEventListener('DOMContentLoaded', async () => {
   const state = {
     sessions: [],
     activeSessionId: null,
+    // Branch mode state
+    branchMode: false,
+    currentBranch: null,
+    availableBranches: [],
+    isGitRepo: false,
   };
 
   const disposerFns = [];
+
+  // Quick prompts templates - detailed instructions for AI
+  const QUICK_PROMPTS = {
+    merge: `Please help me merge the current feature branch into the main branch. Follow these steps carefully:
+
+1. First, verify the current branch name and show me what changes have been made
+2. Switch to the main branch and ensure it's up to date
+3. Merge the feature branch into main, handling any merge conflicts that arise
+4. If there are conflicts, clearly explain them and help me resolve them
+5. After a successful merge, delete the feature branch to keep the repository clean
+6. Provide a summary of what was merged
+
+Please proceed step by step and ask for confirmation before any destructive operations.`,
+
+    handoff: `Please generate a comprehensive handoff summary for the current branch/feature. Include:
+
+1. **Branch Name & Purpose**: What is this branch for?
+2. **Changes Made**: Detailed list of files modified, added, or deleted
+3. **Key Implementation Details**: Important architectural decisions or patterns used
+4. **Testing Status**: What has been tested? What still needs testing?
+5. **Known Issues**: Any bugs, limitations, or technical debt introduced
+6. **Next Steps**: What work remains to be done?
+7. **Dependencies**: Any new packages or external dependencies added
+8. **Breaking Changes**: Any changes that might affect other parts of the codebase
+
+Please analyze the git diff and commit history to provide accurate information.`,
+
+    analysis: `Please perform a comprehensive initial analysis of this codebase. Provide:
+
+1. **Project Overview**:
+   - What is this project? (based on README, package.json, or main files)
+   - What technologies/frameworks are used?
+   - Project structure and organization
+
+2. **Architecture**:
+   - High-level architecture pattern (MVC, microservices, etc.)
+   - Key components and how they interact
+   - Data flow and state management
+
+3. **Entry Points**:
+   - Main application entry points
+   - Build/run commands
+   - Configuration files
+
+4. **Dependencies**:
+   - Key external libraries and their purposes
+   - Development vs production dependencies
+
+5. **Code Quality Observations**:
+   - Testing setup (if any)
+   - Documentation quality
+   - Code organization patterns
+
+6. **Suggestions**:
+   - Areas that might need attention
+   - Potential improvements or modernization opportunities
+
+Please explore the codebase systematically and provide a well-organized report.`,
+
+    debug: `I'm experiencing an issue and need help debugging it systematically. Please follow this structured debugging approach:
+
+1. **Understand the Problem**: First, help me clearly articulate what the issue is, what the expected behavior should be, and what's actually happening.
+
+2. **Hypothesis Generation**: Reflect on 5–7 different possible sources of the problem. Consider:
+   - Logic errors or incorrect assumptions
+   - State management issues
+   - Timing/race conditions
+   - Integration problems between components
+   - Configuration or environment issues
+   - Data flow or transformation problems
+   - External dependencies or API issues
+
+3. **Narrow Down**: Distill those possibilities down to the 1–2 most likely sources based on the symptoms and context.
+
+4. **Validate with Logs**: Before implementing any fixes, add strategic logging/debugging statements to validate your assumptions about the most likely sources. Show me what logs to add and where.
+
+5. **Review Results**: Once I run the code with the new logs, help me analyze the output to confirm the root cause.
+
+6. **Implement Fix**: Only after we've validated the root cause with logs, proceed with implementing the actual code fix.
+
+Please guide me through this process methodically and ask clarifying questions as needed.`
+  };
 
   const findSession = (id) => state.sessions.find((session) => session.id === id);
 
@@ -820,7 +918,60 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     try {
       const cwd = elements.sessionDirInput.value.trim() || undefined;
+
+      // Check if branch mode is enabled
+      if (state.branchMode && state.isGitRepo) {
+        // Show dialog to get branch name
+        const { getBranchNameDialog } = window.claudebox || {};
+        if (!getBranchNameDialog) {
+          alert('Branch name dialog not available');
+          setActionButtonsDisabled(false);
+          return;
+        }
+
+        const branchName = await getBranchNameDialog();
+
+        if (!branchName) {
+          // User cancelled
+          setActionButtonsDisabled(false);
+          return;
+        }
+
+        // Create and checkout the new branch
+        const { gitCreateBranch } = window.claudebox || {};
+        if (gitCreateBranch) {
+          try {
+            const { success, error } = await gitCreateBranch(cwd, branchName);
+
+            if (!success) {
+              alert(`Failed to create branch: ${error}`);
+              setActionButtonsDisabled(false);
+              return;
+            }
+
+            // Update state
+            state.currentBranch = branchName;
+            elements.branchName.textContent = branchName;
+
+            // Refresh branch list
+            await updateBranchInfo();
+          } catch (branchError) {
+            console.error('[renderer] Failed to create branch', branchError);
+            alert(`Error creating branch: ${branchError.message}`);
+            setActionButtonsDisabled(false);
+            return;
+          }
+        }
+      }
+
+      // Create the session (on the new branch if branch mode was enabled)
       const session = await createSession(type, cwd);
+
+      // Add branch metadata to session (non-destructive for future persistence)
+      if (state.currentBranch) {
+        session.branch = state.currentBranch;
+      }
+
       addSession(session);
       // Keep the directory input value for subsequent sessions
     } catch (error) {
@@ -933,9 +1084,335 @@ window.addEventListener('DOMContentLoaded', async () => {
       const selectedPath = await selectDirectory();
       if (selectedPath) {
         elements.sessionDirInput.value = selectedPath;
+        // Update branch info when directory changes
+        await updateBranchInfo();
       }
     });
   }
+
+  // Also update branch info when directory input changes manually
+  elements.sessionDirInput.addEventListener('blur', async () => {
+    await updateBranchInfo();
+  });
+
+  // ========== BRANCH FUNCTIONALITY ==========
+
+  /**
+   * Update branch information based on current directory
+   */
+  async function updateBranchInfo() {
+    const {
+      gitIsRepo,
+      gitGetCurrentBranch,
+      gitGetAllBranches
+    } = window.claudebox || {};
+
+    if (!gitIsRepo || !gitGetCurrentBranch || !gitGetAllBranches) {
+      return;
+    }
+
+    const cwd = elements.sessionDirInput.value.trim() || undefined;
+
+    try {
+      // Check if it's a git repo
+      const { isRepo } = await gitIsRepo(cwd);
+      state.isGitRepo = isRepo;
+
+      if (!isRepo) {
+        elements.branchName.textContent = 'Not a git repo';
+        elements.branchSelector.disabled = true;
+        elements.branchModeToggle.disabled = true;
+        state.currentBranch = null;
+        state.availableBranches = [];
+        return;
+      }
+
+      // Get current branch
+      const { branch } = await gitGetCurrentBranch(cwd);
+      state.currentBranch = branch;
+      elements.branchName.textContent = branch || 'Unknown';
+      elements.branchSelector.disabled = false;
+      elements.branchModeToggle.disabled = false;
+
+      // Get all branches
+      const { branches } = await gitGetAllBranches(cwd);
+      state.availableBranches = branches || [];
+
+      // Update branch dropdown
+      renderBranchList();
+    } catch (error) {
+      console.error('[renderer] Failed to update branch info', error);
+      elements.branchName.textContent = 'Error';
+      elements.branchSelector.disabled = true;
+      elements.branchModeToggle.disabled = true;
+    }
+  }
+
+  /**
+   * Render the branch list in the dropdown
+   */
+  function renderBranchList() {
+    elements.branchList.innerHTML = '';
+
+    if (state.availableBranches.length === 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.style.padding = '8px';
+      emptyMsg.style.color = 'var(--text-secondary)';
+      emptyMsg.style.fontSize = '0.7rem';
+      emptyMsg.textContent = 'No branches found';
+      elements.branchList.appendChild(emptyMsg);
+      return;
+    }
+
+    state.availableBranches.forEach(branch => {
+      const branchBtn = document.createElement('button');
+      branchBtn.className = 'branch-item';
+
+      if (branch === state.currentBranch) {
+        branchBtn.classList.add('active');
+      }
+
+      // Add branch icon
+      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      icon.setAttribute('width', '12');
+      icon.setAttribute('height', '12');
+      icon.setAttribute('viewBox', '0 0 24 24');
+      icon.setAttribute('fill', 'none');
+      icon.setAttribute('stroke', 'currentColor');
+      icon.setAttribute('stroke-width', '2');
+      icon.setAttribute('stroke-linecap', 'round');
+      icon.setAttribute('stroke-linejoin', 'round');
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', '6');
+      line.setAttribute('y1', '3');
+      line.setAttribute('x2', '6');
+      line.setAttribute('y2', '15');
+      icon.appendChild(line);
+
+      const circle1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle1.setAttribute('cx', '18');
+      circle1.setAttribute('cy', '6');
+      circle1.setAttribute('r', '3');
+      icon.appendChild(circle1);
+
+      const circle2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle2.setAttribute('cx', '6');
+      circle2.setAttribute('cy', '18');
+      circle2.setAttribute('r', '3');
+      icon.appendChild(circle2);
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M18 9a9 9 0 0 1-9 9');
+      icon.appendChild(path);
+
+      branchBtn.appendChild(icon);
+
+      const branchText = document.createElement('span');
+      branchText.textContent = branch;
+      branchBtn.appendChild(branchText);
+
+      branchBtn.addEventListener('click', async () => {
+        await checkoutBranch(branch);
+      });
+
+      elements.branchList.appendChild(branchBtn);
+    });
+  }
+
+  /**
+   * Checkout a branch
+   */
+  async function checkoutBranch(branchName) {
+    const { gitCheckoutBranch } = window.claudebox || {};
+    if (!gitCheckoutBranch) return;
+
+    const cwd = elements.sessionDirInput.value.trim() || undefined;
+
+    try {
+      const { success, error } = await gitCheckoutBranch(cwd, branchName);
+
+      if (success) {
+        state.currentBranch = branchName;
+        elements.branchName.textContent = branchName;
+        closeBranchDropdown();
+        renderBranchList();
+      } else {
+        alert(`Failed to checkout branch: ${error}`);
+      }
+    } catch (error) {
+      console.error('[renderer] Failed to checkout branch', error);
+      alert(`Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Toggle branch selector dropdown
+   */
+  function toggleBranchDropdown() {
+    const isOpen = !elements.branchDropdown.classList.contains('hidden');
+
+    if (isOpen) {
+      closeBranchDropdown();
+    } else {
+      openBranchDropdown();
+    }
+  }
+
+  function openBranchDropdown() {
+    elements.branchDropdown.classList.remove('hidden');
+    elements.branchSelector.classList.add('open');
+    elements.newBranchInput.value = '';
+
+    // Close quick prompts dropdown if open
+    closeQuickPromptsDropdown();
+  }
+
+  function closeBranchDropdown() {
+    elements.branchDropdown.classList.add('hidden');
+    elements.branchSelector.classList.remove('open');
+  }
+
+  // Branch selector click handler
+  elements.branchSelector.addEventListener('click', () => {
+    if (!elements.branchSelector.disabled) {
+      toggleBranchDropdown();
+    }
+  });
+
+  // Create new branch button
+  elements.createBranchBtn.addEventListener('click', async () => {
+    const branchName = elements.newBranchInput.value.trim();
+
+    if (!branchName) {
+      alert('Please enter a branch name');
+      return;
+    }
+
+    const { gitCreateBranch } = window.claudebox || {};
+    if (!gitCreateBranch) return;
+
+    const cwd = elements.sessionDirInput.value.trim() || undefined;
+
+    try {
+      const { success, error } = await gitCreateBranch(cwd, branchName);
+
+      if (success) {
+        state.currentBranch = branchName;
+        elements.branchName.textContent = branchName;
+        elements.newBranchInput.value = '';
+
+        // Refresh branch list
+        await updateBranchInfo();
+        closeBranchDropdown();
+      } else {
+        alert(`Failed to create branch: ${error}`);
+      }
+    } catch (error) {
+      console.error('[renderer] Failed to create branch', error);
+      alert(`Error: ${error.message}`);
+    }
+  });
+
+  // Handle Enter key in new branch input
+  elements.newBranchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      elements.createBranchBtn.click();
+    }
+  });
+
+  // Branch mode toggle
+  elements.branchModeToggle.addEventListener('click', () => {
+    if (elements.branchModeToggle.disabled) return;
+
+    state.branchMode = !state.branchMode;
+
+    if (state.branchMode) {
+      elements.branchModeToggle.classList.add('active');
+    } else {
+      elements.branchModeToggle.classList.remove('active');
+    }
+  });
+
+  // ========== QUICK PROMPTS FUNCTIONALITY ==========
+
+  /**
+   * Toggle quick prompts dropdown
+   */
+  function toggleQuickPromptsDropdown() {
+    const isOpen = !elements.quickPromptsDropdown.classList.contains('hidden');
+
+    if (isOpen) {
+      closeQuickPromptsDropdown();
+    } else {
+      openQuickPromptsDropdown();
+    }
+  }
+
+  function openQuickPromptsDropdown() {
+    elements.quickPromptsDropdown.classList.remove('hidden');
+    elements.quickPromptsBtn.classList.add('open');
+
+    // Close branch dropdown if open
+    closeBranchDropdown();
+  }
+
+  function closeQuickPromptsDropdown() {
+    elements.quickPromptsDropdown.classList.add('hidden');
+    elements.quickPromptsBtn.classList.remove('open');
+  }
+
+  // Quick prompts button click handler
+  elements.quickPromptsBtn.addEventListener('click', () => {
+    toggleQuickPromptsDropdown();
+  });
+
+  // Quick prompt item click handlers
+  document.querySelectorAll('.quick-prompt-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const promptKey = item.getAttribute('data-prompt');
+      const promptText = QUICK_PROMPTS[promptKey];
+
+      if (promptText && state.activeSessionId) {
+        // Inject prompt into the active terminal
+        injectPromptToActiveSession(promptText);
+        closeQuickPromptsDropdown();
+      } else if (!state.activeSessionId) {
+        alert('Please select or create a session first');
+      }
+    });
+  });
+
+  /**
+   * Inject a prompt into the active terminal session
+   */
+  function injectPromptToActiveSession(promptText) {
+    if (!state.activeSessionId) return;
+
+    const session = findSession(state.activeSessionId);
+    if (!session || session.status !== 'running') return;
+
+    // Write the prompt text to the terminal
+    write(state.activeSessionId, promptText);
+  }
+
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    // Check if click is outside branch dropdown
+    if (!elements.branchSelector.contains(e.target) &&
+        !elements.branchDropdown.contains(e.target)) {
+      closeBranchDropdown();
+    }
+
+    // Check if click is outside quick prompts dropdown
+    if (!elements.quickPromptsBtn.contains(e.target) &&
+        !elements.quickPromptsDropdown.contains(e.target)) {
+      closeQuickPromptsDropdown();
+    }
+  });
+
+  // Initialize branch info on load
+  updateBranchInfo();
 
   // Sidebar toggle functionality
   function toggleSidebar() {
@@ -1143,6 +1620,21 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   updateEmptyState();
+
+  // Set default directory to user's home directory
+  try {
+    const { getUserHome } = window.claudebox || {};
+    if (getUserHome) {
+      const { path: homePath } = await getUserHome();
+      if (homePath) {
+        elements.sessionDirInput.value = homePath;
+        // Update branch info for the home directory
+        await updateBranchInfo();
+      }
+    }
+  } catch (error) {
+    console.error('[renderer] Failed to set default directory', error);
+  }
 
   // ASCII art animation on boot
   function initializeASCIIAnimation() {
