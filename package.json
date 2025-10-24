@@ -1,6 +1,6 @@
 {
   "name": "claudebox",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
