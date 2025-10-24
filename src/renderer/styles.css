@@ -658,6 +658,19 @@ select,
   flex-shrink: 0;
 }
 
+.branch-item__worktree-badge {
+  margin-left: auto;
+  padding: 2px 5px;
+  font-size: 0.55rem;
+  font-weight: 500;
+  border-radius: 2px;
+  background: rgba(255, 107, 53, 0.15);
+  color: #ffb89d;
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  cursor: help;
+  flex-shrink: 0;
+}
+
 .sidebar__branch-mode-toggle {
   display: flex;
   align-items: center;
@@ -978,6 +991,7 @@ select,
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 1;
 }
 
 .session-item__icon {
@@ -1023,6 +1037,39 @@ select,
   text-overflow: ellipsis;
   user-select: text;
   -webkit-user-select: text;
+}
+
+.session-item__branch-badge {
+  display: inline-block;
+  margin-left: auto;
+  margin-right: 12px;
+  padding: 2px 6px;
+  font-size: 0.65rem;
+  font-weight: 500;
+  border-radius: 3px;
+  background: rgba(255, 107, 53, 0.15);
+  color: #ffb89d;
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: help;
+  white-space: nowrap;
+  vertical-align: middle;
+  width: fit-content;
+  max-width: none;
+  flex-shrink: 0;
+}
+
+.session-item__branch-badge--main {
+  background: rgba(74, 144, 226, 0.15);
+  color: #93c5fd;
+  border-color: rgba(74, 144, 226, 0.3);
+}
+
+.session-item__branch-badge--worktree {
+  background: rgba(255, 107, 53, 0.2);
+  color: #ffb89d;
+  border-color: rgba(255, 107, 53, 0.4);
 }
 
 .session-item__status-column {

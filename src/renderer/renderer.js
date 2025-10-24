@@ -403,6 +403,26 @@ Please guide me through this process methodically and ask clarifying questions a
       titleWrapper.appendChild(icon);
       titleWrapper.appendChild(title);
 
+      // Add branch badge next to title if session has branch info
+      if (session.branch) {
+        const branchBadge = document.createElement('span');
+        branchBadge.className = 'session-item__branch-badge';
+        branchBadge.textContent = `⎇ ${session.branch}`;
+
+        // Add worktree indicator
+        if (session.worktree && session.worktree.enabled) {
+          if (session.worktree.isMain) {
+            branchBadge.classList.add('session-item__branch-badge--main');
+            branchBadge.title = `Main branch (${session.cwd})`;
+          } else {
+            branchBadge.classList.add('session-item__branch-badge--worktree');
+            branchBadge.title = `Worktree: ${session.worktree.path}`;
+          }
+        }
+
+        titleWrapper.appendChild(branchBadge);
+      }
+
       const path = document.createElement('p');
       path.className = 'session-item__path';
       path.textContent = session.cwd || '';
@@ -922,7 +942,10 @@ Please guide me through this process methodically and ask clarifying questions a
     try {
       const cwd = elements.sessionDirInput.value.trim() || undefined;
 
-      // Check if branch mode is enabled
+      let branchName = null;
+      let createNewBranch = false;
+
+      // Check if branch mode is enabled (for creating NEW branches)
       if (state.branchMode && state.isGitRepo) {
         // Show dialog to get branch name
         const { getBranchNameDialog } = window.claudebox || {};
@@ -932,7 +955,7 @@ Please guide me through this process methodically and ask clarifying questions a
           return;
         }
 
-        const branchName = await getBranchNameDialog();
+        branchName = await getBranchNameDialog();
 
         if (!branchName) {
           // User cancelled
@@ -940,39 +963,22 @@ Please guide me through this process methodically and ask clarifying questions a
           return;
         }
 
-        // Create and checkout the new branch
-        const { gitCreateBranch } = window.claudebox || {};
-        if (gitCreateBranch) {
-          try {
-            const { success, error } = await gitCreateBranch(cwd, branchName);
-
-            if (!success) {
-              alert(`Failed to create branch: ${error}`);
-              setActionButtonsDisabled(false);
-              return;
-            }
-
-            // Update state
-            state.currentBranch = branchName;
-            elements.branchName.textContent = branchName;
-
-            // Refresh branch list
-            await updateBranchInfo();
-          } catch (branchError) {
-            console.error('[renderer] Failed to create branch', branchError);
-            alert(`Error creating branch: ${branchError.message}`);
-            setActionButtonsDisabled(false);
-            return;
-          }
-        }
+        // Update state (the worktree will be created by the main process)
+        state.currentBranch = branchName;
+        elements.branchName.textContent = branchName;
+        createNewBranch = true;
+      } else if (state.currentBranch) {
+        // Not creating a new branch, but we have a current branch from dropdown selection
+        branchName = state.currentBranch;
       }
 
-      // Create the session (on the new branch if branch mode was enabled)
-      const session = await createSession(type, cwd);
+      // Create the session with worktree support
+      // Pass branchMode only when creating a new branch, but always pass branchName
+      const session = await createSession(type, cwd, createNewBranch, branchName);
 
-      // Add branch metadata to session (non-destructive for future persistence)
-      if (state.currentBranch) {
-        session.branch = state.currentBranch;
+      // Refresh branch info after session creation (to show new worktrees)
+      if (createNewBranch && state.isGitRepo) {
+        await updateBranchInfo();
       }
 
       addSession(session);
@@ -1154,7 +1160,7 @@ Please guide me through this process methodically and ask clarifying questions a
   /**
    * Render the branch list in the dropdown
    */
-  function renderBranchList() {
+  async function renderBranchList() {
     elements.branchList.innerHTML = '';
 
     if (state.availableBranches.length === 0) {
@@ -1167,6 +1173,24 @@ Please guide me through this process methodically and ask clarifying questions a
       return;
     }
 
+    const { gitListWorktrees } = window.claudebox || {};
+    const cwd = elements.sessionDirInput.value.trim() || undefined;
+
+    // Get list of branches in worktrees
+    let worktreeBranches = new Set();
+    if (gitListWorktrees) {
+      try {
+        const { worktrees } = await gitListWorktrees(cwd);
+        worktrees.forEach(wt => {
+          if (wt.branch) {
+            worktreeBranches.add(wt.branch);
+          }
+        });
+      } catch (error) {
+        console.error('[renderer] Failed to list worktrees', error);
+      }
+    }
+
     state.availableBranches.forEach(branch => {
       const branchBtn = document.createElement('button');
       branchBtn.className = 'branch-item';
@@ -1174,6 +1198,8 @@ Please guide me through this process methodically and ask clarifying questions a
       if (branch === state.currentBranch) {
         branchBtn.classList.add('active');
       }
+
+      const isInWorktree = worktreeBranches.has(branch);
 
       // Add branch icon
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -1215,6 +1241,15 @@ Please guide me through this process methodically and ask clarifying questions a
       branchText.textContent = branch;
       branchBtn.appendChild(branchText);
 
+      // Add worktree indicator badge if branch is in a worktree
+      if (isInWorktree) {
+        const worktreeBadge = document.createElement('span');
+        worktreeBadge.className = 'branch-item__worktree-badge';
+        worktreeBadge.textContent = 'worktree';
+        worktreeBadge.title = 'This branch is checked out in a worktree';
+        branchBtn.appendChild(worktreeBadge);
+      }
+
       branchBtn.addEventListener('click', async () => {
         await checkoutBranch(branch);
       });
@@ -1227,19 +1262,51 @@ Please guide me through this process methodically and ask clarifying questions a
    * Checkout a branch
    */
   async function checkoutBranch(branchName) {
-    const { gitCheckoutBranch } = window.claudebox || {};
+    const { gitCheckoutBranch, gitGetWorktreePath, gitListWorktrees } = window.claudebox || {};
     if (!gitCheckoutBranch) return;
 
-    const cwd = elements.sessionDirInput.value.trim() || undefined;
+    let cwd = elements.sessionDirInput.value.trim() || undefined;
 
     try {
+      // Check if this branch is already in a worktree
+      if (gitGetWorktreePath && gitListWorktrees) {
+        const { path: worktreePath } = await gitGetWorktreePath(cwd, branchName);
+
+        if (worktreePath) {
+          // Branch is in a worktree - switch to that worktree directory
+          elements.sessionDirInput.value = worktreePath;
+          state.currentBranch = branchName;
+          elements.branchName.textContent = branchName;
+          closeBranchDropdown();
+
+          // Refresh branch info for the new directory
+          await updateBranchInfo();
+          return;
+        }
+
+        // Branch doesn't have a worktree - check if we're currently in a worktree
+        const { worktrees } = await gitListWorktrees(cwd);
+        const currentWorktree = worktrees.find(wt => cwd && cwd.includes(wt.path));
+
+        if (currentWorktree) {
+          // We're in a worktree, need to switch to main repo for this branch
+          // Find the main worktree (the one without .claudebox/worktrees in path)
+          const mainWorktree = worktrees.find(wt => !wt.path.includes('.claudebox'));
+          if (mainWorktree) {
+            cwd = mainWorktree.path;
+            elements.sessionDirInput.value = mainWorktree.path;
+          }
+        }
+      }
+
+      // No worktree exists - do regular checkout in main repo
       const { success, error } = await gitCheckoutBranch(cwd, branchName);
 
       if (success) {
         state.currentBranch = branchName;
         elements.branchName.textContent = branchName;
         closeBranchDropdown();
-        renderBranchList();
+        await updateBranchInfo();
       } else {
         alert(`Failed to checkout branch: ${error}`);
       }

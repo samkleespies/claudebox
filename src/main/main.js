@@ -88,18 +88,25 @@ const reportError = (...args) => console.error('[main]', ...args);
 
 /**
  * Execute a git command in a specific directory
+ * SECURITY: Uses execFile to prevent command injection attacks
  * @param {string} cwd - Working directory
  * @param {string[]} args - Git command arguments
  * @returns {Promise<{stdout: string, stderr: string}>}
  */
 function execGit(cwd, args) {
   return new Promise((resolve, reject) => {
-    const { exec } = require('child_process');
-    const command = `git ${args.join(' ')}`;
+    const { execFile } = require('child_process');
 
-    exec(command, { cwd, timeout: 10000 }, (error, stdout, stderr) => {
+    // Use execFile instead of exec to prevent command injection
+    // args are passed as an array, not concatenated into a shell command
+    execFile('git', args, {
+      cwd,
+      timeout: 10000,
+      shell: false,  // Explicitly disable shell to prevent injection
+      maxBuffer: 10 * 1024 * 1024  // 10MB buffer for large outputs
+    }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(stderr || error.message));
+        reject(new Error(stderr.trim() || error.message));
         return;
       }
       resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
@@ -178,6 +185,371 @@ async function isGitRepo(cwd) {
     return true;
   } catch (error) {
     return false;
+  }
+}
+
+/**
+ * Git Worktree Integration
+ */
+
+/**
+ * Get the repository root directory
+ * @param {string} cwd - Working directory
+ * @returns {Promise<string>} - Absolute path to repo root
+ */
+async function getRepoRoot(cwd) {
+  try {
+    const { stdout } = await execGit(cwd, ['rev-parse', '--show-toplevel']);
+    return stdout;
+  } catch (error) {
+    throw new Error('Not a git repository');
+  }
+}
+
+/**
+ * Sanitize branch name for use in file paths
+ * @param {string} branchName - Branch name
+ * @returns {string} - Sanitized name
+ */
+function sanitizeBranchNameForPath(branchName) {
+  return branchName
+    .replace(/\//g, '-')           // Replace slashes with dashes
+    .replace(/[^a-zA-Z0-9-_]/g, '_') // Replace special chars with underscores
+    .toLowerCase();                 // Lowercase for consistency
+}
+
+/**
+ * Get ClaudeBox worktrees directory
+ * @param {string} cwd - Working directory
+ * @returns {Promise<string>} - Path to .claudebox/worktrees
+ */
+async function getWorktreesDir(cwd) {
+  const repoRoot = await getRepoRoot(cwd);
+  const worktreesDir = path.join(repoRoot, '.claudebox', 'worktrees');
+
+  // Ensure directory exists
+  const fs = require('fs').promises;
+  await fs.mkdir(worktreesDir, { recursive: true });
+
+  return worktreesDir;
+}
+
+/**
+ * List all git worktrees
+ * @param {string} cwd - Working directory
+ * @returns {Promise<Array<{path: string, branch: string, head: string}>>}
+ */
+async function listWorktrees(cwd) {
+  try {
+    const { stdout } = await execGit(cwd, [
+      'worktree',
+      'list',
+      '--porcelain'
+    ]);
+
+    const worktrees = [];
+    const lines = stdout.split('\n');
+    let current = {};
+
+    for (const line of lines) {
+      if (line.startsWith('worktree ')) {
+        current.path = line.substring('worktree '.length);
+      } else if (line.startsWith('branch ')) {
+        current.branch = line.substring('branch '.length).replace('refs/heads/', '');
+      } else if (line.startsWith('HEAD ')) {
+        current.head = line.substring('HEAD '.length);
+      } else if (line === '') {
+        if (current.path) {
+          worktrees.push(current);
+          current = {};
+        }
+      }
+    }
+
+    // Add the last worktree if it wasn't followed by an empty line
+    if (current.path) {
+      worktrees.push(current);
+    }
+
+    return worktrees;
+  } catch (error) {
+    log('Failed to list worktrees:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Get worktree path for a branch
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Branch name
+ * @returns {Promise<string|null>} - Worktree path or null
+ */
+async function getWorktreePath(cwd, branchName) {
+  const worktrees = await listWorktrees(cwd);
+  const worktree = worktrees.find(w => w.branch === branchName);
+  return worktree ? worktree.path : null;
+}
+
+/**
+ * Create a git worktree for a branch
+ * SECURITY: Validates worktree path to prevent path traversal attacks
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Name of the branch
+ * @param {boolean} createBranch - Whether to create a new branch
+ * @returns {Promise<{success: boolean, worktreePath?: string, error?: string}>}
+ */
+async function createWorktree(cwd, branchName, createBranch = true) {
+  try {
+    const worktreesDir = await getWorktreesDir(cwd);
+    const sanitizedName = sanitizeBranchNameForPath(branchName);
+    const worktreePath = path.join(worktreesDir, sanitizedName);
+
+    // SECURITY: Validate the resolved path is actually under worktreesDir
+    // This prevents path traversal attacks via malicious branch names
+    const resolvedWorktreePath = path.resolve(worktreePath);
+    const resolvedWorktreesDir = path.resolve(worktreesDir);
+
+    if (!resolvedWorktreePath.startsWith(resolvedWorktreesDir + path.sep)) {
+      return {
+        success: false,
+        error: 'Invalid branch name: path traversal detected'
+      };
+    }
+
+    // Check if worktree already exists
+    const fs = require('fs').promises;
+    try {
+      await fs.access(worktreePath);
+      return {
+        success: false,
+        error: `Worktree already exists at ${worktreePath}`
+      };
+    } catch {
+      // Directory doesn't exist, proceed
+    }
+
+    // Build git worktree add command
+    const args = ['worktree', 'add'];
+    if (createBranch) {
+      args.push('-b', branchName);
+    }
+    args.push(worktreePath);
+    if (!createBranch) {
+      args.push(branchName);
+    }
+
+    await execGit(cwd, args);
+
+    log(`Created worktree for ${branchName} at ${worktreePath}`);
+    return { success: true, worktreePath };
+  } catch (error) {
+    reportError('Failed to create worktree:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Check if a worktree is safe to remove (no uncommitted changes)
+ * @param {string} worktreePath - Path to worktree
+ * @returns {Promise<{safe: boolean, uncommittedChanges: boolean, error?: string}>}
+ */
+async function isWorktreeSafeToRemove(worktreePath) {
+  try {
+    // Check for uncommitted changes
+    const { stdout: statusOutput } = await execGit(worktreePath, [
+      'status', '--porcelain'
+    ]);
+
+    const uncommittedChanges = statusOutput.trim().length > 0;
+
+    return {
+      safe: !uncommittedChanges,
+      uncommittedChanges
+    };
+  } catch (error) {
+    return {
+      safe: false,
+      uncommittedChanges: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Remove a git worktree
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Branch name
+ * @param {boolean} force - Force removal even with uncommitted changes
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function removeWorktree(cwd, branchName, force = false) {
+  try {
+    // Find worktree by branch name
+    const worktrees = await listWorktrees(cwd);
+    const worktree = worktrees.find(w => w.branch === branchName);
+
+    if (!worktree) {
+      return { success: false, error: 'Worktree not found' };
+    }
+
+    // Check if worktree is managed by ClaudeBox
+    const worktreesDir = await getWorktreesDir(cwd);
+    if (!worktree.path.includes(worktreesDir)) {
+      return {
+        success: false,
+        error: 'Worktree is not managed by ClaudeBox'
+      };
+    }
+
+    // Remove worktree
+    const args = ['worktree', 'remove'];
+    if (force) {
+      args.push('--force');
+    }
+    args.push(worktree.path);
+
+    await execGit(cwd, args);
+
+    log(`Removed worktree for ${branchName}`);
+    return { success: true };
+  } catch (error) {
+    reportError('Failed to remove worktree:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Prune stale worktree metadata
+ * @param {string} cwd - Working directory
+ * @returns {Promise<void>}
+ */
+async function pruneWorktrees(cwd) {
+  try {
+    await execGit(cwd, ['worktree', 'prune']);
+    log('Pruned stale worktrees');
+  } catch (error) {
+    log('Failed to prune worktrees:', error.message);
+  }
+}
+
+/**
+ * Worktree Metadata Management
+ */
+
+/**
+ * Get worktree metadata file path
+ * @param {string} cwd - Working directory
+ * @returns {Promise<string>} - Path to metadata file
+ */
+async function getWorktreeMetadataPath(cwd) {
+  const repoRoot = await getRepoRoot(cwd);
+  return path.join(repoRoot, '.claudebox', 'worktree-metadata.json');
+}
+
+/**
+ * Load worktree metadata
+ * @param {string} cwd - Working directory
+ * @returns {Promise<{worktrees: object}>} - Metadata object
+ */
+async function loadWorktreeMetadata(cwd) {
+  const fs = require('fs').promises;
+  const metadataPath = await getWorktreeMetadataPath(cwd);
+
+  try {
+    const data = await fs.readFile(metadataPath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    // File doesn't exist or is invalid, return empty metadata
+    return { worktrees: {} };
+  }
+}
+
+/**
+ * Save worktree metadata
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Branch name
+ * @param {string} worktreePath - Worktree path
+ * @param {string} sessionId - Session ID
+ * @returns {Promise<void>}
+ */
+async function saveWorktreeMetadata(cwd, branchName, worktreePath, sessionId = null) {
+  const fs = require('fs').promises;
+  const metadataPath = await getWorktreeMetadataPath(cwd);
+
+  const metadata = await loadWorktreeMetadata(cwd);
+
+  if (!metadata.worktrees[branchName]) {
+    metadata.worktrees[branchName] = {
+      branch: branchName,
+      path: worktreePath,
+      createdAt: new Date().toISOString(),
+      createdBy: sessionId,
+      sessions: []
+    };
+  }
+
+  // Add session if provided
+  if (sessionId && !metadata.worktrees[branchName].sessions.includes(sessionId)) {
+    metadata.worktrees[branchName].sessions.push(sessionId);
+  }
+
+  await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+}
+
+/**
+ * Remove worktree metadata
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Branch name
+ * @returns {Promise<void>}
+ */
+async function removeWorktreeMetadata(cwd, branchName) {
+  const fs = require('fs').promises;
+  const metadataPath = await getWorktreeMetadataPath(cwd);
+
+  const metadata = await loadWorktreeMetadata(cwd);
+  delete metadata.worktrees[branchName];
+
+  await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+}
+
+/**
+ * Track session in worktree
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Branch name
+ * @param {string} sessionId - Session ID
+ * @returns {Promise<void>}
+ */
+async function trackSessionInWorktree(cwd, branchName, sessionId) {
+  const metadata = await loadWorktreeMetadata(cwd);
+
+  if (metadata.worktrees[branchName]) {
+    if (!metadata.worktrees[branchName].sessions.includes(sessionId)) {
+      metadata.worktrees[branchName].sessions.push(sessionId);
+      const metadataPath = await getWorktreeMetadataPath(cwd);
+      const fs = require('fs').promises;
+      await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+    }
+  }
+}
+
+/**
+ * Untrack session from worktree
+ * @param {string} cwd - Working directory
+ * @param {string} branchName - Branch name
+ * @param {string} sessionId - Session ID
+ * @returns {Promise<void>}
+ */
+async function untrackSessionFromWorktree(cwd, branchName, sessionId) {
+  const fs = require('fs').promises;
+  const metadataPath = await getWorktreeMetadataPath(cwd);
+
+  const metadata = await loadWorktreeMetadata(cwd);
+
+  if (metadata.worktrees[branchName]) {
+    metadata.worktrees[branchName].sessions =
+      metadata.worktrees[branchName].sessions.filter(id => id !== sessionId);
+
+    await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
   }
 }
 
@@ -544,7 +916,7 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('session:create', async (_event, { type, cwd }) => {
+  ipcMain.handle('session:create', async (_event, { type, cwd, branchMode, branchName }) => {
     try {
       // Check if tool is installed first (skip for terminal)
       if (type !== 'terminal') {
@@ -557,7 +929,115 @@ function registerIpcHandlers() {
 
       const initialSize = { cols: DEFAULT_TERMINAL_COLS, rows: DEFAULT_TERMINAL_ROWS };
       const meta = buildSessionMetadata(type);
-      const sessionCwd = cwd || process.cwd();
+
+      let sessionCwd = cwd || process.cwd();
+      let worktreeInfo = null;
+      let sessionBranch = branchName || null;
+
+      // Auto-detect if we're already in a worktree (even without branch mode)
+      if (!branchMode && sessionBranch) {
+        try {
+          const isRepo = await isGitRepo(sessionCwd);
+          if (isRepo) {
+            const worktrees = await listWorktrees(sessionCwd);
+
+            // Find the most specific worktree (longest path match)
+            // This prevents matching the main repo when we're in a worktree subdirectory
+            const matchingWorktrees = worktrees.filter(wt =>
+              sessionCwd.includes(wt.path) || wt.path.includes(sessionCwd)
+            );
+
+            // Sort by path length (descending) to get the most specific match
+            const currentWorktree = matchingWorktrees.sort((a, b) =>
+              b.path.length - a.path.length
+            )[0];
+
+            if (currentWorktree && currentWorktree.branch) {
+              // We're in a worktree directory
+              sessionBranch = currentWorktree.branch;
+              const repoRoot = await getRepoRoot(sessionCwd);
+              const mainBranches = ['main', 'master'];
+              const isMainBranch = mainBranches.includes(sessionBranch);
+
+              worktreeInfo = {
+                enabled: true,
+                path: currentWorktree.path,
+                isMain: isMainBranch,
+                repoRoot: repoRoot
+              };
+
+              // Track this session in the worktree metadata
+              if (!isMainBranch) {
+                await trackSessionInWorktree(repoRoot, sessionBranch, meta.id);
+              }
+
+              log(`Auto-detected worktree for branch ${sessionBranch}`);
+            }
+          }
+        } catch (error) {
+          log('Failed to auto-detect worktree:', error.message);
+        }
+      }
+
+      // Handle worktree creation if branch mode is enabled
+      if (branchMode && branchName) {
+        const isRepo = await isGitRepo(sessionCwd);
+
+        if (!isRepo) {
+          log('Directory is not a git repository, ignoring branch mode');
+        } else {
+          // Determine if this is the main branch
+          const currentBranch = await getCurrentBranch(sessionCwd);
+          const mainBranches = ['main', 'master'];
+          const isMainBranch = mainBranches.includes(branchName) || branchName === currentBranch;
+
+          if (isMainBranch) {
+            // Use main repository directory for main branch
+            sessionBranch = branchName;
+            worktreeInfo = {
+              enabled: true,
+              path: sessionCwd,
+              isMain: true,
+              repoRoot: await getRepoRoot(sessionCwd)
+            };
+            log(`Using main repo directory for branch ${branchName}`);
+          } else {
+            // Create or get worktree for the branch
+            let worktreePath = await getWorktreePath(sessionCwd, branchName);
+
+            if (!worktreePath) {
+              // Create new worktree
+              log(`Creating new worktree for branch ${branchName}`);
+              const createResult = await createWorktree(sessionCwd, branchName, true);
+
+              if (!createResult.success) {
+                throw new Error(`Failed to create worktree: ${createResult.error}`);
+              }
+
+              worktreePath = createResult.worktreePath;
+
+              // Save metadata
+              await saveWorktreeMetadata(sessionCwd, branchName, worktreePath, meta.id);
+            } else {
+              log(`Using existing worktree for branch ${branchName}`);
+              // Track this session in existing worktree
+              await trackSessionInWorktree(sessionCwd, branchName, meta.id);
+            }
+
+            // Update session CWD to point to worktree
+            sessionCwd = worktreePath;
+            sessionBranch = branchName;
+
+            worktreeInfo = {
+              enabled: true,
+              path: worktreePath,
+              isMain: false,
+              repoRoot: await getRepoRoot(cwd)
+            };
+          }
+        }
+      }
+
       const ptyProcess = spawnShell(meta.command, initialSize.cols, initialSize.rows, sessionCwd);
 
       const session = {
@@ -567,6 +1047,8 @@ function registerIpcHandlers() {
         cwd: sessionCwd,
         pty: ptyProcess,
         exitCode: null,
+        branch: sessionBranch,
+        worktree: worktreeInfo
       };
 
       sessions.set(meta.id, session);
@@ -589,6 +1071,8 @@ function registerIpcHandlers() {
         command: session.command,
         createdAt: session.createdAt,
         cwd: session.cwd,
+        branch: session.branch,
+        worktree: session.worktree
       };
     } catch (error) {
       reportError('failed to create session', error);
@@ -606,6 +1090,8 @@ function registerIpcHandlers() {
       createdAt: session.createdAt,
       cwd: session.cwd,
       exitCode: session.exitCode,
+      branch: session.branch,
+      worktree: session.worktree
     }));
   });
 
@@ -640,15 +1126,69 @@ function registerIpcHandlers() {
     terminateSession(session);
   });
 
-  ipcMain.handle('session:dispose', (_event, { id }) => {
+  ipcMain.handle('session:dispose', async (_event, { id }) => {
     const session = sessions.get(id);
     if (!session) {
       return;
     }
 
+    // CRITICAL FIX: Wait for graceful termination before cleanup
+    // This prevents race conditions where we check for uncommitted changes
+    // while the process is still writing to the worktree
     if (session.status === 'running') {
-      terminateSession(session);
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 5000); // Max 5s wait
+
+        const checkExit = () => {
+          if (session.status === 'exited') {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            setTimeout(checkExit, 100);
+          }
+        };
+
+        terminateSession(session);
+        checkExit();
+      });
+
+      // Additional grace period for filesystem operations to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
+
+    // Cleanup worktree tracking and potentially remove worktree
+    if (session.worktree && session.worktree.enabled && !session.worktree.isMain) {
+      try {
+        const repoRoot = session.worktree.repoRoot || session.cwd;
+
+        // Untrack session from worktree metadata
+        await untrackSessionFromWorktree(repoRoot, session.branch, session.id);
+
+        // Check if worktree is still in use by other sessions
+        const metadata = await loadWorktreeMetadata(repoRoot);
+        const worktreeData = metadata.worktrees[session.branch];
+
+        if (worktreeData && worktreeData.sessions.length === 0) {
+          // No other sessions using this worktree, check if safe to remove
+          const safetyCheck = await isWorktreeSafeToRemove(session.worktree.path);
+
+          if (safetyCheck.safe) {
+            // Remove worktree immediately
+            log(`Removing worktree for ${session.branch} (no uncommitted changes)`);
+            await removeWorktree(repoRoot, session.branch, false);
+            await removeWorktreeMetadata(repoRoot, session.branch);
+          } else if (safetyCheck.uncommittedChanges) {
+            // Uncommitted changes exist, warn but don't remove
+            warn(`Worktree ${session.branch} has uncommitted changes, not removing automatically`);
+          }
+        } else {
+          log(`Worktree for ${session.branch} still in use by other sessions`);
+        }
+      } catch (error) {
+        reportError('Failed to cleanup worktree:', error);
+      }
+    }
+
     sessions.delete(id);
   });
 
@@ -992,6 +1532,62 @@ function registerIpcHandlers() {
       return result;
     } catch (error) {
       reportError('failed to checkout branch', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Worktree management handlers
+  ipcMain.handle('git:listWorktrees', async (_event, { cwd }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const worktrees = await listWorktrees(targetDir);
+      return { worktrees };
+    } catch (error) {
+      reportError('failed to list worktrees', error);
+      return { worktrees: [], error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:createWorktree', async (_event, { cwd, branchName, createBranch }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const result = await createWorktree(targetDir, branchName, createBranch !== false);
+      return result;
+    } catch (error) {
+      reportError('failed to create worktree', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:removeWorktree', async (_event, { cwd, branchName, force }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const result = await removeWorktree(targetDir, branchName, force === true);
+      return result;
+    } catch (error) {
+      reportError('failed to remove worktree', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:getWorktreePath', async (_event, { cwd, branchName }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      const path = await getWorktreePath(targetDir, branchName);
+      return { path };
+    } catch (error) {
+      reportError('failed to get worktree path', error);
+      return { path: null, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:pruneWorktrees', async (_event, { cwd }) => {
+    try {
+      const targetDir = cwd && typeof cwd === 'string' && cwd.trim() ? cwd.trim() : process.cwd();
+      await pruneWorktrees(targetDir);
+      return { success: true };
+    } catch (error) {
+      reportError('failed to prune worktrees', error);
       return { success: false, error: error.message };
     }
   });

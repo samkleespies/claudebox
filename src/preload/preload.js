@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
 
 contextBridge.exposeInMainWorld('claudebox', {
-  createSession: (type, cwd) => invoke('session:create', { type, cwd }),
+  createSession: (type, cwd, branchMode, branchName) => invoke('session:create', { type, cwd, branchMode, branchName }),
   listSessions: () => invoke('session:list'),
   write: (id, data) => invoke('session:write', { id, data }),
   resize: (id, cols, rows) => invoke('session:resize', { id, cols, rows }),
@@ -67,5 +67,11 @@ contextBridge.exposeInMainWorld('claudebox', {
   gitGetCurrentBranch: (cwd) => invoke('git:getCurrentBranch', { cwd }),
   gitGetAllBranches: (cwd) => invoke('git:getAllBranches', { cwd }),
   gitCreateBranch: (cwd, branchName) => invoke('git:createBranch', { cwd, branchName }),
-  gitCheckoutBranch: (cwd, branchName) => invoke('git:checkoutBranch', { cwd, branchName })
+  gitCheckoutBranch: (cwd, branchName) => invoke('git:checkoutBranch', { cwd, branchName }),
+  // Worktree management
+  gitListWorktrees: (cwd) => invoke('git:listWorktrees', { cwd }),
+  gitCreateWorktree: (cwd, branchName, createBranch) => invoke('git:createWorktree', { cwd, branchName, createBranch }),
+  gitRemoveWorktree: (cwd, branchName, force) => invoke('git:removeWorktree', { cwd, branchName, force }),
+  gitGetWorktreePath: (cwd, branchName) => invoke('git:getWorktreePath', { cwd, branchName }),
+  gitPruneWorktrees: (cwd) => invoke('git:pruneWorktrees', { cwd })
 });
