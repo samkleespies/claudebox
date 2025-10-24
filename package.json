@@ -1,6 +1,6 @@
 {
   "name": "claudebox",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -73,7 +73,8 @@
           ]
         }
       ],
-      "icon": "src/renderer/assets/images/app-icon.ico"
+      "icon": "src/renderer/assets/images/app-icon.ico",
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "artifactName": "claudebox-${version}-windows-installer.exe",
@@ -100,7 +101,8 @@
       "category": "public.app-category.developer-tools",
       "artifactName": "claudebox-${version}-macos-${arch}.${ext}",
       "icon": "src/renderer/assets/images/app-icon.icns",
-      "identity": null
+      "identity": null,
+      "verifyUpdateCodeSignature": false
     },
     "dmg": {
       "artifactName": "claudebox-${version}-macos-${arch}.dmg",

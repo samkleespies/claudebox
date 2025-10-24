@@ -115,6 +115,54 @@ function execGit(cwd, args) {
 }
 
 /**
+ * Validate git branch name to prevent command injection and invalid characters
+ * SECURITY: Prevents malicious branch names from causing unexpected git behavior
+ * @param {string} branchName - Branch name to validate
+ * @returns {string} - Validated branch name
+ * @throws {Error} - If branch name is invalid
+ */
+function validateBranchName(branchName) {
+  if (!branchName || typeof branchName !== 'string') {
+    throw new Error('Branch name must be a non-empty string');
+  }
+
+  const trimmed = branchName.trim();
+
+  // Prevent argument injection (git commands could be confused by leading hyphens)
+  if (trimmed.startsWith('-')) {
+    throw new Error('Branch name cannot start with hyphen');
+  }
+
+  // Prevent path traversal
+  if (trimmed.includes('..') || trimmed.includes('\\')) {
+    throw new Error('Branch name contains invalid path characters');
+  }
+
+  // Git branch name restrictions (based on git-check-ref-format)
+  // Cannot contain: ASCII control chars, space, ~, ^, :, ?, *, [, \
+  // Cannot end with .lock, cannot contain @{, cannot be @
+  const invalidChars = /[\x00-\x1f\x7f ~^:?*\[\\]/;
+  if (invalidChars.test(trimmed)) {
+    throw new Error('Branch name contains invalid characters');
+  }
+
+  if (trimmed.endsWith('.lock')) {
+    throw new Error('Branch name cannot end with .lock');
+  }
+
+  if (trimmed.includes('@{') || trimmed === '@') {
+    throw new Error('Branch name cannot contain @{ or be @');
+  }
+
+  // Prevent double dots
+  if (trimmed.includes('..')) {
+    throw new Error('Branch name cannot contain consecutive dots');
+  }
+
+  return trimmed;
+}
+
+/**
  * Get the current git branch for a directory
  * @param {string} cwd - Working directory
  * @returns {Promise<string|null>} - Branch name or null if not a git repo
@@ -152,7 +200,8 @@ async function getAllBranches(cwd) {
  */
 async function createBranch(cwd, branchName) {
   try {
-    await execGit(cwd, ['checkout', '-b', branchName]);
+    const safeBranchName = validateBranchName(branchName);
+    await execGit(cwd, ['checkout', '-b', safeBranchName]);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -167,7 +216,8 @@ async function createBranch(cwd, branchName) {
  */
 async function checkoutBranch(cwd, branchName) {
   try {
-    await execGit(cwd, ['checkout', branchName]);
+    const safeBranchName = validateBranchName(branchName);
+    await execGit(cwd, ['checkout', safeBranchName]);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -208,10 +258,11 @@ async function getRepoRoot(cwd) {
 
 /**
  * Sanitize branch name for use in file paths
- * @param {string} branchName - Branch name
+ * @param {string} branchName - Branch name (should already be validated)
  * @returns {string} - Sanitized name
  */
 function sanitizeBranchNameForPath(branchName) {
+  // Note: branchName should already be validated by validateBranchName()
   return branchName
     .replace(/\//g, '-')           // Replace slashes with dashes
     .replace(/[^a-zA-Z0-9-_]/g, '_') // Replace special chars with underscores
@@ -300,8 +351,10 @@ async function getWorktreePath(cwd, branchName) {
  */
 async function createWorktree(cwd, branchName, createBranch = true) {
   try {
+    // SECURITY: Validate branch name before any operations
+    const safeBranchName = validateBranchName(branchName);
     const worktreesDir = await getWorktreesDir(cwd);
-    const sanitizedName = sanitizeBranchNameForPath(branchName);
+    const sanitizedName = sanitizeBranchNameForPath(safeBranchName);
     const worktreePath = path.join(worktreesDir, sanitizedName);
 
     // SECURITY: Validate the resolved path is actually under worktreesDir
@@ -331,16 +384,16 @@ async function createWorktree(cwd, branchName, createBranch = true) {
     // Build git worktree add command
     const args = ['worktree', 'add'];
     if (createBranch) {
-      args.push('-b', branchName);
+      args.push('-b', safeBranchName);
     }
     args.push(worktreePath);
     if (!createBranch) {
-      args.push(branchName);
+      args.push(safeBranchName);
     }
 
     await execGit(cwd, args);
 
-    log(`Created worktree for ${branchName} at ${worktreePath}`);
+    log(`Created worktree for ${safeBranchName} at ${worktreePath}`);
     return { success: true, worktreePath };
   } catch (error) {
     reportError('Failed to create worktree:', error);
@@ -813,6 +866,23 @@ function createWindow() {
 
   // Remove the menu bar completely
   mainWindow.setMenuBarVisibility(false);
+
+  // SECURITY: Implement Content Security Policy for defense-in-depth
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "script-src 'self'; " +
+          "style-src 'self' 'unsafe-inline'; " +  // unsafe-inline needed for terminal styles
+          "img-src 'self' data: file:; " +
+          "font-src 'self' data:; " +
+          "connect-src 'self'"
+        ]
+      }
+    });
+  });
 
   // Register zoom keyboard shortcuts
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -1396,9 +1466,14 @@ function registerIpcHandlers() {
 
       if (process.platform === 'win32') {
         // Prefer PowerShell in a new window via cmd's start
-        // start "" powershell -NoExit -Command "Set-Location -LiteralPath 'path'"
+        // SECURITY: Escape PowerShell special characters to prevent command injection
+        const escapePowerShellPath = (path) => {
+          // Escape backticks, dollar signs, double quotes, and single quotes
+          return path.replace(/[`$"']/g, '`$&');
+        };
+        const escapedPath = escapePowerShellPath(targetDir);
         const cmd = 'cmd.exe';
-        const args = ['/c', 'start', '""', 'powershell', '-NoExit', '-Command', `Set-Location -LiteralPath \"${targetDir.replace(/\\/g, '\\\\')}\"`];
+        const args = ['/c', 'start', '""', 'powershell', '-NoExit', '-Command', `Set-Location -LiteralPath '${escapedPath}'`];
         spawn(cmd, args, { detached: true, windowsHide: false });
         return true;
       }
@@ -1650,6 +1725,11 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL || process.env.NODE_ENV === 'd
 
 // Disable auto-updater in development
 if (!isDev) {
+  // SECURITY NOTE: Updates are currently unsigned (verifyUpdateCodeSignature: false in package.json)
+  // For production use, consider implementing code signing:
+  // 1. Obtain a code signing certificate
+  // 2. Configure signing in package.json: "win": { "sign": "./sign.js" }
+  // 3. Enable verification: "verifyUpdateCodeSignature": true
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
