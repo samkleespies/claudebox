@@ -76,13 +76,16 @@
       "icon": "src/renderer/assets/images/app-icon.ico"
     },
     "nsis": {
-      "artifactName": "claudebox-${version}-windows.exe",
+      "artifactName": "claudebox-${version}-windows-installer.exe",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "ClaudeBox"
+    },
+    "portable": {
+      "artifactName": "claudebox-${version}-windows-portable.exe"
     },
     "mac": {
       "target": [
