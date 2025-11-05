@@ -9,6 +9,7 @@
   --accent-claude: #ff6b35;
   --accent-codex: #5899ff;
   --accent-opencode: #22c55e;
+  --accent-gemini: #8B7CFF;
   --accent-terminal: #666666;
   --text-primary: #e8e8e8;
   --text-secondary: #888888;
@@ -60,6 +61,11 @@ select,
 /* ========== SIDEBAR ========== */
 
 .sidebar {
+  /* Always positioned absolutely to avoid layout jumps */
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
   width: 300px;
   min-width: 200px;
   max-width: 600px;
@@ -69,20 +75,23 @@ select,
   flex-direction: column;
   padding: 24px 20px;
   gap: 12px;
-  position: relative;
+  z-index: 10;
   /* Managed via JS for snappy + predictable behavior */
   flex-shrink: 0;
   overflow: visible; /* Allow content to extend to bottom */
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              border-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   container-type: inline-size;
 }
 
 .sidebar.hidden {
-  /* Slide out by its actual current width (set from JS) */
-  margin-left: calc(-1 * var(--sidebar-width, 300px) - 1px);
+  /* Slide out visually */
+  transform: translateX(calc(-1 * var(--sidebar-width, 300px)));
   opacity: 0;
   pointer-events: none;
+  border-right: none;
+  overflow: hidden;
 }
 
 /* Responsive scaling for smaller sidebar widths */
@@ -211,8 +220,9 @@ select,
 }
 
 .sidebar__action:disabled {
-  opacity: 0.6;
-  cursor: wait;
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
 }
 
 .sidebar__action--claude {
@@ -264,7 +274,7 @@ select,
 }
 
 .sidebar__action--gemini:not(:disabled):hover {
-  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
+  box-shadow: 0 4px 12px rgba(139, 124, 255, 0.4);
 }
 
 .sidebar__action span {
@@ -492,14 +502,15 @@ select,
   outline: none;
 }
 
-.sidebar__branch-selector:hover {
+.sidebar__branch-selector:hover:not(:disabled) {
   border-color: rgba(255, 107, 53, 0.5);
   background: #1f1f1f;
 }
 
 .sidebar__branch-selector:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+  filter: grayscale(0.5);
 }
 
 .sidebar__branch-selector svg:first-child {
@@ -671,7 +682,7 @@ select,
   flex-shrink: 0;
 }
 
-.sidebar__branch-mode-toggle {
+.sidebar__worktree-mode-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -688,20 +699,26 @@ select,
   aspect-ratio: 1 / 1;
 }
 
-.sidebar__branch-mode-toggle:hover {
+.sidebar__worktree-mode-toggle:hover:not(:disabled) {
   border-color: rgba(255, 107, 53, 0.5);
   background: #1f1f1f;
   color: var(--text-primary);
 }
 
-.sidebar__branch-mode-toggle.active {
+.sidebar__worktree-mode-toggle.active {
   background: rgba(255, 107, 53, 0.2);
   border-color: rgba(255, 107, 53, 0.5);
   color: #ffb89d;
 }
 
-.sidebar__branch-mode-toggle:active {
+.sidebar__worktree-mode-toggle:active:not(:disabled) {
   transform: translateY(1px);
+}
+
+.sidebar__worktree-mode-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
 }
 
 /* ========== QUICK PROMPTS ========== */
@@ -808,13 +825,28 @@ select,
   color: var(--text-secondary);
 }
 
-.sidebar__toggle {
+.sidebar__footer {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.sidebar__footer > * {
+  pointer-events: auto;
+}
+
+.sidebar__settings-btn {
   width: 40px;
   height: 40px;
-  background: rgba(13, 13, 13, 0.9); /* semi-transparent background for visibility */
+  background: rgba(13, 13, 13, 0.9);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
@@ -822,15 +854,41 @@ select,
   display: flex;
   align-items: center;
   justify-content: center;
-  --btn-scale: 0.5; /* visible scale for both toggles */
+  transform: scale(0.5);
+  transform-origin: bottom left;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  color: var(--text-secondary);
+  outline: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar__settings-btn:hover {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--text-primary);
+}
+
+.sidebar__settings-btn:active {
+  transform: scale(0.475);
+}
+
+.sidebar__toggle {
+  width: 40px;
+  height: 40px;
+  background: rgba(13, 13, 13, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  --btn-scale: 0.5;
   transform: scale(var(--btn-scale));
   transform-origin: bottom right;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
   color: var(--text-secondary);
   outline: none;
-  z-index: 15; /* Higher z-index to float above content */
-  pointer-events: auto;
-  /* Add subtle shadow for depth */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -869,14 +927,17 @@ select,
 /* ========== SIDEBAR RESIZER ========== */
 
 .sidebar-resizer {
+  position: absolute;
+  left: var(--sidebar-visible-width, 300px);
+  top: 0;
+  height: 100%;
   width: 1px;
   background: var(--sidebar-border);
   cursor: ew-resize;
-  position: relative;
-  flex-shrink: 0;
-  transition: background 0.2s ease,
+  z-index: 11;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.2s ease,
               box-shadow 0.2s ease,
-              margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -903,12 +964,9 @@ select,
               1px 0 0 0 rgba(255, 107, 53, 0.6);
 }
 
-.sidebar.hidden + .sidebar-resizer {
-  /* When the sidebar is hidden, completely remove the resizer from layout
-     so the workspace can truly span full width (avoids 1px gap/clip). */
-  width: 0;
-  flex-basis: 0;
-  margin-left: 0;
+.sidebar.hidden ~ .sidebar-resizer {
+  /* When the sidebar is hidden, move resizer off-screen */
+  left: -10px;
   opacity: 0;
   pointer-events: none;
 }
@@ -1042,7 +1100,7 @@ select,
 .session-item__branch-badge {
   display: inline-block;
   margin-left: auto;
-  margin-right: 12px;
+  margin-right: 8px;
   padding: 2px 6px;
   font-size: 0.65rem;
   font-weight: 500;
@@ -1199,6 +1257,17 @@ select,
   color: #86efac;
 }
 
+.session-item--gemini.active {
+  border-top-color: var(--accent-gemini);
+  border-bottom-color: var(--accent-gemini);
+  background: #14101f;
+}
+
+.session-item--gemini.active .session-item__status {
+  background: rgba(139, 124, 255, 0.2);
+  color: #c4b5fd;
+}
+
 .session-item--terminal.active {
   border-top-color: var(--accent-terminal);
   border-bottom-color: var(--accent-terminal);
@@ -1218,6 +1287,13 @@ select,
   flex-direction: column;
   min-width: 0;
   position: relative;
+  overflow: hidden;
+  margin-left: var(--sidebar-visible-width, 300px);
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.workspace.sidebar-hidden {
+  margin-left: 0;
 }
 
 /* Window Controls */
@@ -1263,12 +1339,18 @@ select,
   border: none;
   overflow: hidden;
   display: flex;
+  min-width: 0;
+  min-height: 0;
 }
 
 .terminal-host {
   flex: 1;
   height: 100%;
-  margin: 0 -14px 0 0;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .terminal-empty {
@@ -1295,7 +1377,8 @@ select,
 }
 
 .xterm {
-  padding: 0;
+  padding: 0 !important;
+  margin: 0 !important;
   font-size: 13px;
   line-height: 1.35;
   width: 100%;
@@ -1313,6 +1396,23 @@ select,
 
 .xterm .xterm-screen {
   width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.xterm .xterm-screen canvas {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.xterm .xterm-rows {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.xterm .xterm-helpers {
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar {
@@ -1607,6 +1707,292 @@ body.debug-mode .xterm .xterm-screen {
 .form-group input:focus,
 .form-group textarea:focus {
   border-color: rgba(255, 107, 53, 0.5);
+}
+
+/* ========== SETTINGS MODAL ========== */
+
+.modal__content--settings {
+  max-width: 900px;
+  max-height: 90vh;
+  height: 700px;
+}
+
+.modal__body--settings {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.settings-container {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-tabs {
+  width: 180px;
+  background: #0a0a0a;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.settings-tabs:hover,
+.settings-tabs.scrolling {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.settings-tabs::-webkit-scrollbar {
+  width: 5px;
+}
+
+.settings-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-tabs::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0);
+  border-radius: 10px;
+  transition: background 0.3s ease-in-out, opacity 0.3s ease-in-out;
+  opacity: 0;
+}
+
+.settings-tabs:hover::-webkit-scrollbar-thumb,
+.settings-tabs.scrolling::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+}
+
+.settings-tabs::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.4);
+  opacity: 1;
+}
+
+.settings-tabs::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+}
+
+.settings-tab {
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  outline: none;
+}
+
+.settings-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.settings-tab.active {
+  background: rgba(255, 107, 53, 0.1);
+  border-left-color: rgba(255, 107, 53, 0.8);
+  color: #ffb89d;
+}
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.settings-content:hover,
+.settings-content.scrolling {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.settings-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0);
+  border-radius: 10px;
+  transition: background 0.3s ease-in-out, opacity 0.3s ease-in-out;
+  opacity: 0;
+}
+
+.settings-content:hover::-webkit-scrollbar-thumb,
+.settings-content.scrolling::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+}
+
+.settings-content::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.4);
+  opacity: 1;
+}
+
+.settings-content::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+}
+
+.settings-panel {
+  display: none;
+}
+
+.settings-panel.active {
+  display: block;
+}
+
+.settings-panel h3 {
+  margin: 0 0 20px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-group {
+  margin-bottom: 20px;
+}
+
+.settings-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.settings-group input[type="text"],
+.settings-group input[type="number"],
+.settings-group input[type="color"],
+.settings-group select {
+  width: 100%;
+  padding: 8px 12px;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.settings-group input[type="number"] {
+  width: 150px;
+}
+
+.settings-group input[type="color"] {
+  width: 80px;
+  height: 40px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.settings-group input[type="text"]:focus,
+.settings-group input[type="number"]:focus,
+.settings-group select:focus {
+  border-color: rgba(255, 107, 53, 0.5);
+}
+
+.settings-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #ff6b35;
+}
+
+.settings-group input[type="range"] {
+  width: 100%;
+  height: 6px;
+  background: #1a1a1a;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.settings-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #ff6b35;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.settings-group input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.settings-group input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #ff6b35;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.settings-group input[type="range"]::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+
+.settings-group select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="%23888888" d="M6 9L1 4h10z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.settings-hint {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.settings-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0a0a0a;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+/* Shortcut input special styling */
+.settings-group input[readonly] {
+  cursor: pointer;
+  background: #151515;
+}
+
+.settings-group input[readonly]:hover {
+  border-color: rgba(255, 107, 53, 0.3);
+}
+
+.settings-group input[readonly]:focus {
+  border-color: rgba(255, 107, 53, 0.7);
+  background: #1a1a1a;
 }
 
 /* ========== BUTTONS ========== */
