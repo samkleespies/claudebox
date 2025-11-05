@@ -74,8 +74,7 @@
           ]
         }
       ],
-      "icon": "src/renderer/assets/images/app-icon.ico",
-      "verifyUpdateCodeSignature": false
+      "icon": "src/renderer/assets/images/app-icon.ico"
     },
     "nsis": {
       "artifactName": "claudebox-${version}-windows-installer.exe",
@@ -102,8 +101,7 @@
       "category": "public.app-category.developer-tools",
       "artifactName": "claudebox-${version}-macos-${arch}.${ext}",
       "icon": "src/renderer/assets/images/app-icon.icns",
-      "identity": null,
-      "verifyUpdateCodeSignature": false
+      "identity": null
     },
     "dmg": {
       "artifactName": "claudebox-${version}-macos-${arch}.dmg",
