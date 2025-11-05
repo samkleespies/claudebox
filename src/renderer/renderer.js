@@ -100,6 +100,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     sidebarResizer: document.getElementById('sidebarResizer'),
     sidebarToggle: document.getElementById('sidebarToggle'),
     sidebarToggleWorkspace: document.getElementById('sidebarToggleWorkspace'),
+    settingsBtn: document.getElementById('settingsBtn'),
     // Branch selector elements
     branchSelector: document.getElementById('branchSelector'),
     branchName: document.getElementById('branchName'),
@@ -107,10 +108,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     branchList: document.getElementById('branchList'),
     newBranchInput: document.getElementById('newBranchInput'),
     createBranchBtn: document.getElementById('createBranchBtn'),
-    branchModeToggle: document.getElementById('branchModeToggle'),
-    // Quick prompts elements
-    quickPromptsBtn: document.getElementById('quickPromptsBtn'),
-    quickPromptsDropdown: document.getElementById('quickPromptsDropdown'),
+    worktreeModeToggle: document.getElementById('worktreeModeToggle'),
   };
 
   if (!Object.values(elements).every(Boolean)) {
@@ -180,99 +178,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   const state = {
     sessions: [],
     activeSessionId: null,
-    // Branch mode state
-    branchMode: false,
+    // Worktree mode state
+    worktreeMode: false,
     currentBranch: null,
     availableBranches: [],
     isGitRepo: false,
-    // Custom prompts state
-    customPrompts: [],
-    editingPromptIndex: null,
   };
 
   const disposerFns = [];
-
-  // Quick prompts templates - detailed instructions for AI
-  const QUICK_PROMPTS = {
-    merge: `Please help me merge the current feature branch into the main branch. Follow these steps carefully:
-
-1. First, verify the current branch name and show me what changes have been made
-2. Switch to the main branch and ensure it's up to date
-3. Merge the feature branch into main, handling any merge conflicts that arise
-4. If there are conflicts, clearly explain them and help me resolve them
-5. After a successful merge, delete the feature branch to keep the repository clean
-6. Provide a summary of what was merged
-
-Please proceed step by step and ask for confirmation before any destructive operations.`,
-
-    handoff: `Please generate a comprehensive handoff summary for the current branch/feature. Include:
-
-1. **Branch Name & Purpose**: What is this branch for?
-2. **Changes Made**: Detailed list of files modified, added, or deleted
-3. **Key Implementation Details**: Important architectural decisions or patterns used
-4. **Testing Status**: What has been tested? What still needs testing?
-5. **Known Issues**: Any bugs, limitations, or technical debt introduced
-6. **Next Steps**: What work remains to be done?
-7. **Dependencies**: Any new packages or external dependencies added
-8. **Breaking Changes**: Any changes that might affect other parts of the codebase
-
-Please analyze the git diff and commit history to provide accurate information.`,
-
-    analysis: `Please perform a comprehensive initial analysis of this codebase. Provide:
-
-1. **Project Overview**:
-   - What is this project? (based on README, package.json, or main files)
-   - What technologies/frameworks are used?
-   - Project structure and organization
-
-2. **Architecture**:
-   - High-level architecture pattern (MVC, microservices, etc.)
-   - Key components and how they interact
-   - Data flow and state management
-
-3. **Entry Points**:
-   - Main application entry points
-   - Build/run commands
-   - Configuration files
-
-4. **Dependencies**:
-   - Key external libraries and their purposes
-   - Development vs production dependencies
-
-5. **Code Quality Observations**:
-   - Testing setup (if any)
-   - Documentation quality
-   - Code organization patterns
-
-6. **Suggestions**:
-   - Areas that might need attention
-   - Potential improvements or modernization opportunities
-
-Please explore the codebase systematically and provide a well-organized report.`,
-
-    debug: `I'm experiencing an issue and need help debugging it systematically. Please follow this structured debugging approach:
-
-1. **Understand the Problem**: First, help me clearly articulate what the issue is, what the expected behavior should be, and what's actually happening.
-
-2. **Hypothesis Generation**: Reflect on 5–7 different possible sources of the problem. Consider:
-   - Logic errors or incorrect assumptions
-   - State management issues
-   - Timing/race conditions
-   - Integration problems between components
-   - Configuration or environment issues
-   - Data flow or transformation problems
-   - External dependencies or API issues
-
-3. **Narrow Down**: Distill those possibilities down to the 1–2 most likely sources based on the symptoms and context.
-
-4. **Validate with Logs**: Before implementing any fixes, add strategic logging/debugging statements to validate your assumptions about the most likely sources. Show me what logs to add and where.
-
-5. **Review Results**: Once I run the code with the new logs, help me analyze the output to confirm the root cause.
-
-6. **Implement Fix**: Only after we've validated the root cause with logs, proceed with implementing the actual code fix.
-
-Please guide me through this process methodically and ask clarifying questions as needed.`
-  };
 
   const findSession = (id) => state.sessions.find((session) => session.id === id);
 
@@ -286,11 +199,22 @@ Please guide me through this process methodically and ask clarifying questions a
     }
   }
 
-  function setActionButtonsDisabled(disabled) {
-    elements.newClaudeButton.disabled = disabled;
-    elements.newCodexButton.disabled = disabled;
-    elements.newOpenCodeButton.disabled = disabled;
-    elements.newTerminalButton.disabled = disabled;
+  function setActionButtonsDisabled(disabled, exceptButton = null) {
+    if (exceptButton !== elements.newClaudeButton) {
+      elements.newClaudeButton.disabled = disabled;
+    }
+    if (exceptButton !== elements.newCodexButton) {
+      elements.newCodexButton.disabled = disabled;
+    }
+    if (exceptButton !== elements.newOpenCodeButton) {
+      elements.newOpenCodeButton.disabled = disabled;
+    }
+    if (exceptButton !== elements.newGeminiButton) {
+      elements.newGeminiButton.disabled = disabled;
+    }
+    if (exceptButton !== elements.newTerminalButton) {
+      elements.newTerminalButton.disabled = disabled;
+    }
   }
 
   function renderSessionList() {
@@ -524,9 +448,48 @@ Please guide me through this process methodically and ask clarifying questions a
     window.requestAnimationFrame(() => {
       fitPending = false;
       try {
+        // Debug: Log terminal dimensions before fit
+        const terminalEl = elements.terminalHostEl.querySelector('.xterm');
+        const viewportEl = elements.terminalHostEl.querySelector('.xterm-viewport');
+        const screenEl = elements.terminalHostEl.querySelector('.xterm-screen');
+
+        console.log('[DEBUG] Before fit:', {
+          terminalHost: {
+            width: elements.terminalHostEl.offsetWidth,
+            clientWidth: elements.terminalHostEl.clientWidth,
+            scrollWidth: elements.terminalHostEl.scrollWidth
+          },
+          xterm: terminalEl ? {
+            width: terminalEl.offsetWidth,
+            clientWidth: terminalEl.clientWidth,
+            scrollWidth: terminalEl.scrollWidth,
+            computedPadding: window.getComputedStyle(terminalEl).padding
+          } : null,
+          viewport: viewportEl ? {
+            width: viewportEl.offsetWidth,
+            scrollLeft: viewportEl.scrollLeft
+          } : null,
+          screen: screenEl ? {
+            width: screenEl.offsetWidth,
+            transform: window.getComputedStyle(screenEl).transform
+          } : null,
+          cols: terminal.cols,
+          rows: terminal.rows
+        });
+
         fitAddon.fit();
+
+        // Debug: Log after fit
+        console.log('[DEBUG] After fit:', {
+          cols: terminal.cols,
+          rows: terminal.rows,
+          viewport: viewportEl ? {
+            width: viewportEl.offsetWidth,
+            scrollLeft: viewportEl.scrollLeft
+          } : null
+        });
       } catch (error) {
-        // Silently ignore fit errors
+        console.error('[DEBUG] Fit error:', error);
       }
 
       const activeId = state.activeSessionId;
@@ -936,8 +899,8 @@ Please guide me through this process methodically and ask clarifying questions a
     document.head.appendChild(style);
   }
 
-  async function handleCreateSession(type) {
-    setActionButtonsDisabled(true);
+  async function handleCreateSession(type, buttonElement) {
+    setActionButtonsDisabled(true, buttonElement);
 
     try {
       const cwd = elements.sessionDirInput.value.trim() || undefined;
@@ -946,7 +909,7 @@ Please guide me through this process methodically and ask clarifying questions a
       let createNewBranch = false;
 
       // Check if branch mode is enabled (for creating NEW branches)
-      if (state.branchMode && state.isGitRepo) {
+      if (state.worktreeMode && state.isGitRepo) {
         // Show dialog to get branch name
         const { getBranchNameDialog } = window.claudebox || {};
         if (!getBranchNameDialog) {
@@ -973,7 +936,7 @@ Please guide me through this process methodically and ask clarifying questions a
       }
 
       // Create the session with worktree support
-      // Pass branchMode only when creating a new branch, but always pass branchName
+      // Pass worktreeMode only when creating a new branch, but always pass branchName
       const session = await createSession(type, cwd, createNewBranch, branchName);
 
       // Refresh branch info after session creation (to show new worktrees)
@@ -1081,11 +1044,25 @@ Please guide me through this process methodically and ask clarifying questions a
     }
   });
 
-  elements.newClaudeButton.addEventListener('click', () => handleCreateSession('claude'));
-  elements.newCodexButton.addEventListener('click', () => handleCreateSession('codex'));
-  elements.newOpenCodeButton.addEventListener('click', () => handleCreateSession('opencode'));
-  elements.newGeminiButton.addEventListener('click', () => handleCreateSession('gemini'));
-  elements.newTerminalButton.addEventListener('click', () => handleCreateSession('terminal'));
+  // Directory validation - enable/disable session buttons based on whether directory is set
+  function validateDirectoryInput() {
+    const hasDirectory = elements.sessionDirInput.value.trim().length > 0;
+
+    // Enable or disable all session creation buttons
+    elements.newClaudeButton.disabled = !hasDirectory;
+    elements.newCodexButton.disabled = !hasDirectory;
+    elements.newOpenCodeButton.disabled = !hasDirectory;
+    elements.newGeminiButton.disabled = !hasDirectory;
+    elements.newTerminalButton.disabled = !hasDirectory;
+
+    // Note: Branch controls are handled by updateBranchInfo() which checks if it's a git repo
+  }
+
+  elements.newClaudeButton.addEventListener('click', () => handleCreateSession('claude', elements.newClaudeButton));
+  elements.newCodexButton.addEventListener('click', () => handleCreateSession('codex', elements.newCodexButton));
+  elements.newOpenCodeButton.addEventListener('click', () => handleCreateSession('opencode', elements.newOpenCodeButton));
+  elements.newGeminiButton.addEventListener('click', () => handleCreateSession('gemini', elements.newGeminiButton));
+  elements.newTerminalButton.addEventListener('click', () => handleCreateSession('terminal', elements.newTerminalButton));
 
   // Directory browse button
   if (elements.browseDirButton && selectDirectory) {
@@ -1093,16 +1070,13 @@ Please guide me through this process methodically and ask clarifying questions a
       const selectedPath = await selectDirectory();
       if (selectedPath) {
         elements.sessionDirInput.value = selectedPath;
+        // Validate and enable buttons
+        validateDirectoryInput();
         // Update branch info when directory changes
         await updateBranchInfo();
       }
     });
   }
-
-  // Also update branch info when directory input changes manually
-  elements.sessionDirInput.addEventListener('blur', async () => {
-    await updateBranchInfo();
-  });
 
   // ========== BRANCH FUNCTIONALITY ==========
 
@@ -1120,7 +1094,18 @@ Please guide me through this process methodically and ask clarifying questions a
       return;
     }
 
-    const cwd = elements.sessionDirInput.value.trim() || undefined;
+    const cwd = elements.sessionDirInput.value.trim();
+
+    // If no directory is selected, disable branch controls
+    if (!cwd) {
+      elements.branchName.textContent = 'No directory';
+      elements.branchSelector.disabled = true;
+      elements.worktreeModeToggle.disabled = true;
+      state.isGitRepo = false;
+      state.currentBranch = null;
+      state.availableBranches = [];
+      return;
+    }
 
     try {
       // Check if it's a git repo
@@ -1130,7 +1115,7 @@ Please guide me through this process methodically and ask clarifying questions a
       if (!isRepo) {
         elements.branchName.textContent = 'Not a git repo';
         elements.branchSelector.disabled = true;
-        elements.branchModeToggle.disabled = true;
+        elements.worktreeModeToggle.disabled = true;
         state.currentBranch = null;
         state.availableBranches = [];
         return;
@@ -1141,7 +1126,7 @@ Please guide me through this process methodically and ask clarifying questions a
       state.currentBranch = branch;
       elements.branchName.textContent = branch || 'Unknown';
       elements.branchSelector.disabled = false;
-      elements.branchModeToggle.disabled = false;
+      elements.worktreeModeToggle.disabled = false;
 
       // Get all branches
       const { branches } = await gitGetAllBranches(cwd);
@@ -1153,7 +1138,7 @@ Please guide me through this process methodically and ask clarifying questions a
       console.error('[renderer] Failed to update branch info', error);
       elements.branchName.textContent = 'Error';
       elements.branchSelector.disabled = true;
-      elements.branchModeToggle.disabled = true;
+      elements.worktreeModeToggle.disabled = true;
     }
   }
 
@@ -1392,79 +1377,17 @@ Please guide me through this process methodically and ask clarifying questions a
   });
 
   // Branch mode toggle
-  elements.branchModeToggle.addEventListener('click', () => {
-    if (elements.branchModeToggle.disabled) return;
+  elements.worktreeModeToggle.addEventListener('click', () => {
+    if (elements.worktreeModeToggle.disabled) return;
 
-    state.branchMode = !state.branchMode;
+    state.worktreeMode = !state.worktreeMode;
 
-    if (state.branchMode) {
-      elements.branchModeToggle.classList.add('active');
+    if (state.worktreeMode) {
+      elements.worktreeModeToggle.classList.add('active');
     } else {
-      elements.branchModeToggle.classList.remove('active');
+      elements.worktreeModeToggle.classList.remove('active');
     }
   });
-
-  // ========== QUICK PROMPTS FUNCTIONALITY ==========
-
-  /**
-   * Toggle quick prompts dropdown
-   */
-  function toggleQuickPromptsDropdown() {
-    const isOpen = !elements.quickPromptsDropdown.classList.contains('hidden');
-
-    if (isOpen) {
-      closeQuickPromptsDropdown();
-    } else {
-      openQuickPromptsDropdown();
-    }
-  }
-
-  function openQuickPromptsDropdown() {
-    elements.quickPromptsDropdown.classList.remove('hidden');
-    elements.quickPromptsBtn.classList.add('open');
-
-    // Close branch dropdown if open
-    closeBranchDropdown();
-  }
-
-  function closeQuickPromptsDropdown() {
-    elements.quickPromptsDropdown.classList.add('hidden');
-    elements.quickPromptsBtn.classList.remove('open');
-  }
-
-  // Quick prompts button click handler
-  elements.quickPromptsBtn.addEventListener('click', () => {
-    toggleQuickPromptsDropdown();
-  });
-
-  // Quick prompt item click handlers
-  document.querySelectorAll('.quick-prompt-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const promptKey = item.getAttribute('data-prompt');
-      const promptText = QUICK_PROMPTS[promptKey];
-
-      if (promptText && state.activeSessionId) {
-        // Inject prompt into the active terminal
-        injectPromptToActiveSession(promptText);
-        closeQuickPromptsDropdown();
-      } else if (!state.activeSessionId) {
-        alert('Please select or create a session first');
-      }
-    });
-  });
-
-  /**
-   * Inject a prompt into the active terminal session
-   */
-  function injectPromptToActiveSession(promptText) {
-    if (!state.activeSessionId) return;
-
-    const session = findSession(state.activeSessionId);
-    if (!session || session.status !== 'running') return;
-
-    // Write the prompt text to the terminal
-    write(state.activeSessionId, promptText);
-  }
 
   // Close dropdowns when clicking outside
   document.addEventListener('click', (e) => {
@@ -1473,289 +1396,199 @@ Please guide me through this process methodically and ask clarifying questions a
         !elements.branchDropdown.contains(e.target)) {
       closeBranchDropdown();
     }
-
-    // Check if click is outside quick prompts dropdown
-    if (!elements.quickPromptsBtn.contains(e.target) &&
-        !elements.quickPromptsDropdown.contains(e.target)) {
-      closeQuickPromptsDropdown();
-    }
   });
 
   // Initialize branch info on load
   updateBranchInfo();
 
-  // ========== CUSTOM PROMPTS MANAGEMENT ==========
+  // ========== SETTINGS MODAL ==========
 
-  const customPromptsModal = document.getElementById('customPromptsModal');
-  const promptEditorModal = document.getElementById('promptEditorModal');
-  const managePromptsBtn = document.getElementById('managePromptsBtn');
-  const closeModalBtn = document.getElementById('closeModalBtn');
-  const closeEditorBtn = document.getElementById('closeEditorBtn');
-  const addPromptBtn = document.getElementById('addPromptBtn');
-  const customPromptsList = document.getElementById('customPromptsList');
-  const customPromptsContainer = document.getElementById('customPromptsContainer');
-  const promptName = document.getElementById('promptName');
-  const promptDescription = document.getElementById('promptDescription');
-  const promptContent = document.getElementById('promptContent');
-  const savePromptBtn = document.getElementById('savePromptBtn');
-  const cancelPromptBtn = document.getElementById('cancelPromptBtn');
-  const editorModalTitle = document.getElementById('editorModalTitle');
+  const settingsModal = document.getElementById('settingsModal');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const resetSettingsBtn = document.getElementById('resetSettingsBtn');
 
-  /**
-   * Load custom prompts from storage
-   */
-  async function loadCustomPrompts() {
-    const { loadCustomPrompts } = window.claudebox || {};
-    if (!loadCustomPrompts) return;
+  // Default settings
+  const defaultSettings = {
+    // Appearance
+    sidebarWidth: 300,
+    enableAnimations: true,
+    accentClaude: '#ff6b35',
+    accentCodex: '#5899ff',
+    accentOpencode: '#22c55e',
+    accentGemini: '#8B7CFF',
+    // Terminal
+    terminalFontFamily: 'JetBrains Mono, Cascadia Code, Fira Code, monospace',
+    terminalFontSize: 13,
+    terminalFontWeight: 300,
+    terminalFontWeightBold: 600,
+    terminalCursorStyle: 'bar',
+    terminalCursorBlink: true,
+    terminalScrollback: 2000,
+    terminalBgColor: '#0d0d0d',
+    terminalFgColor: '#e8e8e8',
+    terminalCursorColor: '#ff6b35',
+    // Sessions
+    claudeCommand: 'claude --dangerously-skip-permissions',
+    codexCommand: 'codex --dangerously-bypass-approvals-and-sandbox',
+    opencodeCommand: 'opencode',
+    geminiCommand: 'gemini --yolo',
+    activitySensitivity: 0.5,
+    // Git
+    worktreeDir: '.claudebox/worktrees',
+    mainBranches: 'main, master',
+    // Window
+    windowWidth: 1280,
+    windowHeight: 820,
+    rememberWindowSize: false,
+    // Updates
+    autoCheckUpdates: true,
+    autoDownloadUpdates: false,
+    // Shortcuts (empty by default)
+    shortcutNewClaude: '',
+    shortcutNewCodex: '',
+    shortcutNewTerminal: '',
+    shortcutCloseSession: '',
+    shortcutToggleSidebar: '',
+    // Advanced
+    hardwareAcceleration: false,
+    debugMode: false,
+    gitTimeout: 10000
+  };
+
+  let currentSettings = { ...defaultSettings };
+
+  // Tab switching
+  document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.getAttribute('data-tab');
+
+      // Update tabs
+      document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Update panels
+      document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector(`[data-panel="${tabName}"]`).classList.add('active');
+    });
+  });
+
+  // Scrollbar visibility on scroll
+  let scrollTimeout;
+  const settingsContent = document.querySelector('.settings-content');
+  const settingsTabs = document.querySelector('.settings-tabs');
+
+  function showScrollbar(element) {
+    element.classList.add('scrolling');
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      element.classList.remove('scrolling');
+    }, 1000);
+  }
+
+  if (settingsContent) {
+    settingsContent.addEventListener('scroll', () => showScrollbar(settingsContent));
+  }
+
+  if (settingsTabs) {
+    settingsTabs.addEventListener('scroll', () => showScrollbar(settingsTabs));
+  }
+
+  // Load settings from storage
+  async function loadSettings() {
+    const { loadSettings } = window.claudebox || {};
+    if (!loadSettings) return;
 
     try {
-      const { prompts } = await loadCustomPrompts();
-      state.customPrompts = prompts || [];
-      renderCustomPromptsInDropdown();
-      renderCustomPromptsList();
+      const { settings } = await loadSettings();
+      currentSettings = { ...defaultSettings, ...settings };
+      applySettingsToForm();
     } catch (error) {
-      console.error('[renderer] Failed to load custom prompts', error);
+      console.error('[renderer] Failed to load settings', error);
     }
   }
 
-  /**
-   * Save custom prompts to storage
-   */
-  async function saveCustomPrompts() {
-    const { saveCustomPrompts } = window.claudebox || {};
-    if (!saveCustomPrompts) return;
+  // Apply settings to form inputs
+  function applySettingsToForm() {
+    Object.keys(currentSettings).forEach(key => {
+      const input = document.getElementById(key);
+      if (!input) return;
 
-    try {
-      await saveCustomPrompts(state.customPrompts);
-    } catch (error) {
-      console.error('[renderer] Failed to save custom prompts', error);
-      alert('Failed to save custom prompts');
-    }
-  }
-
-  /**
-   * Render custom prompts in the quick prompts dropdown
-   */
-  function renderCustomPromptsInDropdown() {
-    customPromptsContainer.innerHTML = '';
-
-    if (state.customPrompts.length === 0) return;
-
-    // Add divider before custom prompts
-    const divider = document.createElement('div');
-    divider.className = 'prompts-divider';
-    customPromptsContainer.appendChild(divider);
-
-    state.customPrompts.forEach((prompt, index) => {
-      const promptItem = document.createElement('button');
-      promptItem.className = 'quick-prompt-item';
-      promptItem.setAttribute('data-custom-index', index);
-
-      const label = document.createElement('span');
-      label.className = 'quick-prompt-label';
-      label.textContent = prompt.name;
-
-      const desc = document.createElement('span');
-      desc.className = 'quick-prompt-desc';
-      desc.textContent = prompt.description;
-
-      promptItem.appendChild(label);
-      promptItem.appendChild(desc);
-
-      promptItem.addEventListener('click', () => {
-        if (state.activeSessionId) {
-          injectPromptToActiveSession(prompt.content);
-          closeQuickPromptsDropdown();
-        } else {
-          alert('Please select or create a session first');
-        }
-      });
-
-      customPromptsContainer.appendChild(promptItem);
+      if (input.type === 'checkbox') {
+        input.checked = currentSettings[key];
+      } else {
+        input.value = currentSettings[key];
+      }
     });
   }
 
-  /**
-   * Render custom prompts in the management modal
-   */
-  function renderCustomPromptsList() {
-    customPromptsList.innerHTML = '';
+  // Gather settings from form
+  function gatherSettingsFromForm() {
+    const settings = {};
 
-    if (state.customPrompts.length === 0) {
-      const emptyMsg = document.createElement('div');
-      emptyMsg.style.padding = '20px';
-      emptyMsg.style.textAlign = 'center';
-      emptyMsg.style.color = 'var(--text-secondary)';
-      emptyMsg.style.fontSize = '0.75rem';
-      emptyMsg.textContent = 'No custom prompts yet. Click "Add New Prompt" to create one.';
-      customPromptsList.appendChild(emptyMsg);
-      return;
-    }
+    Object.keys(defaultSettings).forEach(key => {
+      const input = document.getElementById(key);
+      if (!input) return;
 
-    state.customPrompts.forEach((prompt, index) => {
-      const card = document.createElement('div');
-      card.className = 'custom-prompt-card';
-
-      const info = document.createElement('div');
-      info.className = 'custom-prompt-card__info';
-
-      const name = document.createElement('div');
-      name.className = 'custom-prompt-card__name';
-      name.textContent = prompt.name;
-
-      const desc = document.createElement('div');
-      desc.className = 'custom-prompt-card__desc';
-      desc.textContent = prompt.description;
-
-      info.appendChild(name);
-      info.appendChild(desc);
-
-      const actions = document.createElement('div');
-      actions.className = 'custom-prompt-card__actions';
-
-      // Edit button
-      const editBtn = document.createElement('button');
-      editBtn.className = 'custom-prompt-card__btn';
-      editBtn.title = 'Edit prompt';
-      editBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-      `;
-      editBtn.addEventListener('click', () => openEditPromptModal(index));
-
-      // Delete button
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'custom-prompt-card__btn custom-prompt-card__btn--delete';
-      deleteBtn.title = 'Delete prompt';
-      deleteBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-      `;
-      deleteBtn.addEventListener('click', () => deletePrompt(index));
-
-      actions.appendChild(editBtn);
-      actions.appendChild(deleteBtn);
-
-      card.appendChild(info);
-      card.appendChild(actions);
-
-      customPromptsList.appendChild(card);
+      if (input.type === 'checkbox') {
+        settings[key] = input.checked;
+      } else if (input.type === 'number') {
+        settings[key] = parseFloat(input.value);
+      } else {
+        settings[key] = input.value;
+      }
     });
+
+    return settings;
   }
 
-  /**
-   * Open the management modal
-   */
-  function openManagePromptsModal() {
-    customPromptsModal.classList.remove('hidden');
-    renderCustomPromptsList();
-    closeQuickPromptsDropdown();
-  }
+  // Save settings
+  async function saveSettings() {
+    const { saveSettings } = window.claudebox || {};
+    if (!saveSettings) return;
 
-  /**
-   * Close the management modal
-   */
-  function closeManagePromptsModal() {
-    customPromptsModal.classList.add('hidden');
-  }
+    try {
+      currentSettings = gatherSettingsFromForm();
+      const result = await saveSettings(currentSettings);
 
-  /**
-   * Open the editor modal for adding a new prompt
-   */
-  function openAddPromptModal() {
-    state.editingPromptIndex = null;
-    editorModalTitle.textContent = 'Add Custom Prompt';
-    promptName.value = '';
-    promptDescription.value = '';
-    promptContent.value = '';
-    promptEditorModal.classList.remove('hidden');
-  }
-
-  /**
-   * Open the editor modal for editing an existing prompt
-   */
-  function openEditPromptModal(index) {
-    state.editingPromptIndex = index;
-    const prompt = state.customPrompts[index];
-    editorModalTitle.textContent = 'Edit Custom Prompt';
-    promptName.value = prompt.name;
-    promptDescription.value = prompt.description;
-    promptContent.value = prompt.content;
-    promptEditorModal.classList.remove('hidden');
-    closeManagePromptsModal();
-  }
-
-  /**
-   * Close the editor modal
-   */
-  function closeEditorModal() {
-    promptEditorModal.classList.add('hidden');
-    state.editingPromptIndex = null;
-  }
-
-  /**
-   * Save a prompt (add or edit)
-   */
-  async function savePrompt() {
-    const name = promptName.value.trim();
-    const description = promptDescription.value.trim();
-    const content = promptContent.value.trim();
-
-    if (!name || !description || !content) {
-      alert('Please fill in all fields');
-      return;
+      if (result.success) {
+        alert('Settings saved successfully! Some settings may require a restart to take effect.');
+        closeSettingsModal();
+      } else {
+        alert('Failed to save settings: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('[renderer] Failed to save settings', error);
+      alert('Failed to save settings: ' + error.message);
     }
-
-    const prompt = { name, description, content };
-
-    if (state.editingPromptIndex !== null) {
-      // Edit existing
-      state.customPrompts[state.editingPromptIndex] = prompt;
-    } else {
-      // Add new
-      state.customPrompts.push(prompt);
-    }
-
-    await saveCustomPrompts();
-    renderCustomPromptsInDropdown();
-    renderCustomPromptsList();
-    closeEditorModal();
-    openManagePromptsModal();
   }
 
-  /**
-   * Delete a prompt
-   */
-  async function deletePrompt(index) {
-    const prompt = state.customPrompts[index];
-    if (!confirm(`Are you sure you want to delete "${prompt.name}"?`)) {
-      return;
+  // Reset to defaults
+  function resetSettings() {
+    if (confirm('Are you sure you want to reset all settings to defaults?')) {
+      currentSettings = { ...defaultSettings };
+      applySettingsToForm();
     }
-
-    state.customPrompts.splice(index, 1);
-    await saveCustomPrompts();
-    renderCustomPromptsInDropdown();
-    renderCustomPromptsList();
   }
 
-  // Event listeners for custom prompts
-  managePromptsBtn.addEventListener('click', openManagePromptsModal);
-  closeModalBtn.addEventListener('click', closeManagePromptsModal);
-  addPromptBtn.addEventListener('click', openAddPromptModal);
-  closeEditorBtn.addEventListener('click', closeEditorModal);
-  cancelPromptBtn.addEventListener('click', closeEditorModal);
-  savePromptBtn.addEventListener('click', savePrompt);
+  // Open settings modal
+  function openSettingsModal() {
+    settingsModal.classList.remove('hidden');
+    loadSettings();
+  }
 
-  // Close modals when clicking overlay
-  customPromptsModal.querySelector('.modal__overlay').addEventListener('click', closeManagePromptsModal);
-  promptEditorModal.querySelector('.modal__overlay').addEventListener('click', closeEditorModal);
+  // Close settings modal
+  function closeSettingsModal() {
+    settingsModal.classList.add('hidden');
+  }
 
-  // Load custom prompts on init
-  loadCustomPrompts();
+  // Event listeners
+  settingsBtn.addEventListener('click', openSettingsModal);
+  closeSettingsBtn.addEventListener('click', closeSettingsModal);
+  settingsModal.querySelector('.modal__overlay').addEventListener('click', closeSettingsModal);
+  saveSettingsBtn.addEventListener('click', saveSettings);
+  resetSettingsBtn.addEventListener('click', resetSettings);
 
   // ========== AUTO-UPDATE NOTIFICATION ==========
 
@@ -1868,11 +1701,37 @@ Please guide me through this process methodically and ask clarifying questions a
 
   // Sidebar toggle functionality
   function toggleSidebar() {
-    // Capture current sidebar width so CSS can slide exactly that distance
-    const rect = elements.sidebar.getBoundingClientRect();
-    elements.sidebar.style.setProperty('--sidebar-width', `${Math.round(rect.width)}px`);
+    // Capture current sidebar width for CSS animation
+    const sidebarRect = elements.sidebar.getBoundingClientRect();
+    const sidebarWidth = Math.round(sidebarRect.width);
+    elements.sidebar.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+    document.documentElement.style.setProperty('--sidebar-visible-width', `${sidebarWidth}px`);
 
     const currentlyHidden = elements.sidebar.classList.contains('hidden');
+
+    // Debug: Check sidebar and workspace positions before toggle
+    const workspaceEl = document.querySelector('.workspace');
+    const workspaceRect = workspaceEl?.getBoundingClientRect();
+    const canvasEl = elements.terminalHostEl.querySelector('canvas');
+
+    console.log('[DEBUG] Before toggle:', {
+      sidebar: {
+        left: sidebarRect.left,
+        right: sidebarRect.right,
+        width: sidebarRect.width,
+        computedWidth: window.getComputedStyle(elements.sidebar).width,
+        transform: window.getComputedStyle(elements.sidebar).transform,
+        hidden: elements.sidebar.classList.contains('hidden')
+      },
+      workspace: workspaceRect ? {
+        left: workspaceRect.left,
+        width: workspaceRect.width
+      } : null,
+      canvas: canvasEl ? {
+        left: canvasEl.getBoundingClientRect().left,
+        offsetLeft: canvasEl.offsetLeft
+      } : null
+    });
 
     const afterTransition = (el, fn, timeout = 350) => {
       let called = false;
@@ -1882,6 +1741,39 @@ Please guide me through this process methodically and ask clarifying questions a
         if (called) return;
         called = true;
         el.removeEventListener('transitionend', handler);
+
+        // Debug: Check positions after transition
+        const sidebarRectAfter = elements.sidebar.getBoundingClientRect();
+        const workspaceElAfter = document.querySelector('.workspace');
+        const workspaceRectAfter = workspaceElAfter?.getBoundingClientRect();
+        const canvasElAfter = elements.terminalHostEl.querySelector('canvas');
+        const resizerEl = document.querySelector('.sidebar-resizer');
+        const resizerRect = resizerEl?.getBoundingClientRect();
+
+        console.log('[DEBUG] After toggle transition:', {
+          sidebar: {
+            left: sidebarRectAfter.left,
+            right: sidebarRectAfter.right,
+            width: sidebarRectAfter.width,
+            computedWidth: window.getComputedStyle(elements.sidebar).width,
+            transform: window.getComputedStyle(elements.sidebar).transform,
+            hidden: elements.sidebar.classList.contains('hidden')
+          },
+          resizer: resizerRect ? {
+            left: resizerRect.left,
+            width: resizerRect.width,
+            computedWidth: window.getComputedStyle(resizerEl).width
+          } : null,
+          workspace: workspaceRectAfter ? {
+            left: workspaceRectAfter.left,
+            width: workspaceRectAfter.width
+          } : null,
+          canvas: canvasElAfter ? {
+            left: canvasElAfter.getBoundingClientRect().left,
+            offsetLeft: canvasElAfter.offsetLeft
+          } : null
+        });
+
         fn();
       };
       el.addEventListener('transitionend', handler);
@@ -1894,9 +1786,12 @@ Please guide me through this process methodically and ask clarifying questions a
       }, timeout);
     };
 
+    const workspaceElement = document.querySelector('.workspace');
+
     if (!currentlyHidden) {
       // Hiding: collapse width smoothly via CSS; resizer auto collapses via CSS rule
       elements.sidebar.classList.add('hidden');
+      if (workspaceElement) workspaceElement.classList.add('sidebar-hidden');
       afterTransition(elements.sidebar, () => {
         // Show floating workspace toggle
         elements.sidebarToggleWorkspace.style.display = 'flex';
@@ -1922,6 +1817,7 @@ Please guide me through this process methodically and ask clarifying questions a
 
       // Slide the sidebar back in
       elements.sidebar.classList.remove('hidden');
+      if (workspaceElement) workspaceElement.classList.remove('sidebar-hidden');
       afterTransition(elements.sidebar, () => {
         fitAndNotify();
       });
@@ -1939,6 +1835,9 @@ Please guide me through this process methodically and ask clarifying questions a
   const MIN_SIDEBAR_WIDTH = 200;
   const MAX_SIDEBAR_WIDTH = 600;
   let preferredSidebarWidth = elements.sidebar.offsetWidth || DEFAULT_SIDEBAR_WIDTH;
+
+  // Set initial sidebar width CSS variable
+  document.documentElement.style.setProperty('--sidebar-visible-width', `${preferredSidebarWidth}px`);
 
   // Helper function to update ASCII logo font size based on sidebar width
   function updateAsciiLogoSize(width) {
@@ -1964,6 +1863,7 @@ Please guide me through this process methodically and ask clarifying questions a
     }
     elements.sidebar.style.width = `${clamped}px`;
     elements.sidebar.style.setProperty('--sidebar-width', `${clamped}px`);
+    document.documentElement.style.setProperty('--sidebar-visible-width', `${clamped}px`);
     updateAsciiLogoSize(clamped);
     fitAndNotify();
   }
@@ -2073,20 +1973,18 @@ Please guide me through this process methodically and ask clarifying questions a
 
   updateEmptyState();
 
-  // Set default directory to user's home directory
-  try {
-    const { getUserHome } = window.claudebox || {};
-    if (getUserHome) {
-      const { path: homePath } = await getUserHome();
-      if (homePath) {
-        elements.sessionDirInput.value = homePath;
-        // Update branch info for the home directory
-        await updateBranchInfo();
-      }
-    }
-  } catch (error) {
-    console.error('[renderer] Failed to set default directory', error);
-  }
+  // Initialize with buttons disabled (no default directory)
+  validateDirectoryInput();
+
+  // Watch for directory input changes
+  elements.sessionDirInput.addEventListener('input', async () => {
+    validateDirectoryInput();
+    await updateBranchInfo();
+  });
+  elements.sessionDirInput.addEventListener('blur', async () => {
+    validateDirectoryInput();
+    await updateBranchInfo();
+  });
 
   // ASCII art animation on boot
   function initializeASCIIAnimation() {

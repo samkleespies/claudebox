@@ -986,7 +986,7 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('session:create', async (_event, { type, cwd, branchMode, branchName }) => {
+  ipcMain.handle('session:create', async (_event, { type, cwd, worktreeMode, branchName }) => {
     try {
       // Check if tool is installed first (skip for terminal)
       if (type !== 'terminal') {
@@ -1005,11 +1005,12 @@ function registerIpcHandlers() {
       let sessionBranch = branchName || null;
 
       // Auto-detect if we're already in a worktree (even without branch mode)
-      if (!branchMode && sessionBranch) {
+      if (!worktreeMode && sessionBranch) {
         try {
           const isRepo = await isGitRepo(sessionCwd);
           if (isRepo) {
             const worktrees = await listWorktrees(sessionCwd);
+            const repoRoot = await getRepoRoot(sessionCwd);
 
             // Find the most specific worktree (longest path match)
             // This prevents matching the main repo when we're in a worktree subdirectory
@@ -1023,25 +1024,30 @@ function registerIpcHandlers() {
             )[0];
 
             if (currentWorktree && currentWorktree.branch) {
-              // We're in a worktree directory
               sessionBranch = currentWorktree.branch;
-              const repoRoot = await getRepoRoot(sessionCwd);
-              const mainBranches = ['main', 'master'];
-              const isMainBranch = mainBranches.includes(sessionBranch);
 
-              worktreeInfo = {
-                enabled: true,
-                path: currentWorktree.path,
-                isMain: isMainBranch,
-                repoRoot: repoRoot
-              };
+              // Only set enabled: true if we're actually in a worktree directory (not the main repo)
+              const isInWorktreeDir = currentWorktree.path.includes('.claudebox') &&
+                                      currentWorktree.path.includes('worktrees');
 
-              // Track this session in the worktree metadata
-              if (!isMainBranch) {
-                await trackSessionInWorktree(repoRoot, sessionBranch, meta.id);
+              if (isInWorktreeDir) {
+                const mainBranches = ['main', 'master'];
+                const isMainBranch = mainBranches.includes(sessionBranch);
+
+                worktreeInfo = {
+                  enabled: true,
+                  path: currentWorktree.path,
+                  isMain: isMainBranch,
+                  repoRoot: repoRoot
+                };
+
+                // Track this session in the worktree metadata
+                if (!isMainBranch) {
+                  await trackSessionInWorktree(repoRoot, sessionBranch, meta.id);
+                }
+
+                log(`Auto-detected worktree for branch ${sessionBranch}`);
               }
-
-              log(`Auto-detected worktree for branch ${sessionBranch}`);
             }
           }
         } catch (error) {
@@ -1050,7 +1056,7 @@ function registerIpcHandlers() {
       }
 
       // Handle worktree creation if branch mode is enabled
-      if (branchMode && branchName) {
+      if (worktreeMode && branchName) {
         const isRepo = await isGitRepo(sessionCwd);
 
         if (!isRepo) {
@@ -1525,32 +1531,31 @@ function registerIpcHandlers() {
     }
   });
 
-  // Custom prompts storage
-  const fs = require('fs');
-  const customPromptsPath = path.join(app.getPath('userData'), 'custom-prompts.json');
+  // Settings storage
+  const settingsPath = path.join(app.getPath('userData'), 'settings.json');
 
-  // Load custom prompts
-  ipcMain.handle('prompts:load', async () => {
+  // Load settings
+  ipcMain.handle('settings:load', async () => {
     try {
-      if (fs.existsSync(customPromptsPath)) {
-        const data = fs.readFileSync(customPromptsPath, 'utf8');
-        const prompts = JSON.parse(data);
-        return { prompts };
+      if (fs.existsSync(settingsPath)) {
+        const data = fs.readFileSync(settingsPath, 'utf8');
+        const settings = JSON.parse(data);
+        return { settings };
       }
-      return { prompts: [] };
+      return { settings: {} };
     } catch (error) {
-      reportError('failed to load custom prompts', error);
-      return { prompts: [], error: error.message };
+      reportError('failed to load settings', error);
+      return { settings: {}, error: error.message };
     }
   });
 
-  // Save custom prompts
-  ipcMain.handle('prompts:save', async (_event, { prompts }) => {
+  // Save settings
+  ipcMain.handle('settings:save', async (_event, { settings }) => {
     try {
-      fs.writeFileSync(customPromptsPath, JSON.stringify(prompts, null, 2), 'utf8');
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
       return { success: true };
     } catch (error) {
-      reportError('failed to save custom prompts', error);
+      reportError('failed to save settings', error);
       return { success: false, error: error.message };
     }
   });

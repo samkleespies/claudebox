@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
 
 contextBridge.exposeInMainWorld('claudebox', {
-  createSession: (type, cwd, branchMode, branchName) => invoke('session:create', { type, cwd, branchMode, branchName }),
+  createSession: (type, cwd, worktreeMode, branchName) => invoke('session:create', { type, cwd, worktreeMode, branchName }),
   listSessions: () => invoke('session:list'),
   write: (id, data) => invoke('session:write', { id, data }),
   resize: (id, cols, rows) => invoke('session:resize', { id, cols, rows }),
@@ -34,9 +34,9 @@ contextBridge.exposeInMainWorld('claudebox', {
   openExternalTerminal: (cwd) => invoke('terminal:open', { cwd }),
   // System
   getUserHome: () => invoke('system:getUserHome'),
-  // Custom prompts
-  loadCustomPrompts: () => invoke('prompts:load'),
-  saveCustomPrompts: (prompts) => invoke('prompts:save', { prompts }),
+  // Settings
+  loadSettings: () => invoke('settings:load'),
+  saveSettings: (settings) => invoke('settings:save', { settings }),
   // Auto-updater
   checkForUpdates: () => invoke('updater:checkForUpdates'),
   downloadUpdate: () => invoke('updater:downloadUpdate'),

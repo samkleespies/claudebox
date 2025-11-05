@@ -17,6 +17,60 @@
           </div>
           <div class="sidebar__divider"></div>
         </div>
+        <div class="sidebar__dir-input-wrapper">
+          <label for="sessionDir" class="sidebar__dir-label">Directory</label>
+          <div class="sidebar__dir-input-group">
+            <input
+              type="text"
+              id="sessionDir"
+              class="sidebar__dir-input"
+              placeholder="Select a directory to begin"
+            />
+            <button id="browseDirBtn" class="sidebar__dir-browse" title="Browse for directory">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M3 6C3 4.89543 3.89543 4 5 4H9L11 6H19C20.1046 6 21 6.89543 21 8V18C21 19.1046 20.1046 20 19 20H5C3.89543 20 3 19.1046 3 18V6Z" fill="currentColor"/>
+                <path d="M3 6C3 4.89543 3.89543 4 5 4H9L11 6H19C20.1046 6 21 6.89543 21 8V18C21 19.1046 20.1046 20 19 20H5C3.89543 20 3 19.1046 3 18V6Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="sidebar__branch-wrapper">
+          <label class="sidebar__branch-label">Branch</label>
+          <div class="sidebar__branch-controls">
+            <div class="sidebar__branch-selector-wrapper">
+              <button id="branchSelector" class="sidebar__branch-selector" title="Select git branch">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="6" y1="3" x2="6" y2="15"></line>
+                  <circle cx="18" cy="6" r="3"></circle>
+                  <circle cx="6" cy="18" r="3"></circle>
+                  <path d="M18 9a9 9 0 0 1-9 9"></path>
+                </svg>
+                <span id="branchName">Not a git repo</span>
+                <svg class="branch-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div id="branchDropdown" class="sidebar__branch-dropdown hidden">
+                <div class="branch-dropdown__header">
+                  <input type="text" id="newBranchInput" class="branch-dropdown__input" placeholder="New branch name..." />
+                  <button id="createBranchBtn" class="branch-dropdown__create-btn" title="Create new branch">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                  </button>
+                </div>
+                <div class="branch-dropdown__divider"></div>
+                <div id="branchList" class="branch-dropdown__list"></div>
+              </div>
+            </div>
+            <button id="worktreeModeToggle" class="sidebar__worktree-mode-toggle" title="Toggle worktree mode">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
         <div class="sidebar__new-session-label">New Session</div>
         <div class="sidebar__actions">
           <div>
@@ -45,108 +99,22 @@
               <span>Terminal</span>
             </button>
           </div>
-          <div class="sidebar__dir-input-wrapper">
-            <label for="sessionDir" class="sidebar__dir-label">Directory</label>
-            <div class="sidebar__dir-input-group">
-              <input
-                type="text"
-                id="sessionDir"
-                class="sidebar__dir-input"
-                placeholder="Leave empty for current directory"
-              />
-              <button id="browseDirBtn" class="sidebar__dir-browse" title="Browse for directory">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path d="M3 6C3 4.89543 3.89543 4 5 4H9L11 6H19C20.1046 6 21 6.89543 21 8V18C21 19.1046 20.1046 20 19 20H5C3.89543 20 3 19.1046 3 18V6Z" fill="currentColor"/>
-                  <path d="M3 6C3 4.89543 3.89543 4 5 4H9L11 6H19C20.1046 6 21 6.89543 21 8V18C21 19.1046 20.1046 20 19 20H5C3.89543 20 3 19.1046 3 18V6Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div class="sidebar__branch-wrapper">
-            <label class="sidebar__branch-label">Branch</label>
-            <div class="sidebar__branch-controls">
-              <div class="sidebar__branch-selector-wrapper">
-                <button id="branchSelector" class="sidebar__branch-selector" title="Select git branch">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="6" y1="3" x2="6" y2="15"></line>
-                    <circle cx="18" cy="6" r="3"></circle>
-                    <circle cx="6" cy="18" r="3"></circle>
-                    <path d="M18 9a9 9 0 0 1-9 9"></path>
-                  </svg>
-                  <span id="branchName">Not a git repo</span>
-                  <svg class="branch-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <div id="branchDropdown" class="sidebar__branch-dropdown hidden">
-                  <div class="branch-dropdown__header">
-                    <input type="text" id="newBranchInput" class="branch-dropdown__input" placeholder="New branch name..." />
-                    <button id="createBranchBtn" class="branch-dropdown__create-btn" title="Create new branch">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                      </svg>
-                    </button>
-                  </div>
-                  <div class="branch-dropdown__divider"></div>
-                  <div id="branchList" class="branch-dropdown__list"></div>
-                </div>
-              </div>
-              <button id="branchModeToggle" class="sidebar__branch-mode-toggle" title="Toggle branch mode">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="sidebar__prompts-section">
-          <button id="quickPromptsBtn" class="sidebar__quick-prompts-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span>Quick Prompts</span>
-            <svg class="prompts-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
-          <div id="quickPromptsDropdown" class="sidebar__quick-prompts-dropdown hidden">
-            <div id="builtInPrompts">
-              <button class="quick-prompt-item" data-prompt="debug">
-                <span class="quick-prompt-label">Debug an Issue</span>
-                <span class="quick-prompt-desc">Systematic debugging with logs</span>
-              </button>
-              <button class="quick-prompt-item" data-prompt="merge">
-                <span class="quick-prompt-label">Merge Branch</span>
-                <span class="quick-prompt-desc">Merge into main & clean up</span>
-              </button>
-              <button class="quick-prompt-item" data-prompt="handoff">
-                <span class="quick-prompt-label">Handoff Summary</span>
-                <span class="quick-prompt-desc">Generate branch summary</span>
-              </button>
-              <button class="quick-prompt-item" data-prompt="analysis">
-                <span class="quick-prompt-label">Project Analysis</span>
-                <span class="quick-prompt-desc">Initial codebase overview</span>
-              </button>
-            </div>
-            <div id="customPromptsContainer"></div>
-            <div class="prompts-divider"></div>
-            <button id="managePromptsBtn" class="manage-prompts-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M12 1v6m0 6v6m-9-9h6m6 0h6"></path>
-              </svg>
-              <span>Manage Custom Prompts</span>
-            </button>
-          </div>
         </div>
         <div class="sidebar__list-header">Sessions</div>
         <ul id="sessionList" class="session-list"></ul>
-        <button id="sidebarToggle" class="sidebar__toggle" aria-label="Toggle sidebar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="15 18 9 12 15 6"></polyline>
-          </svg>
-        </button>
+        <div class="sidebar__footer">
+          <button id="settingsBtn" class="sidebar__settings-btn" aria-label="Open settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"></path>
+            </svg>
+          </button>
+          <button id="sidebarToggle" class="sidebar__toggle" aria-label="Toggle sidebar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+        </div>
       </aside>
       <div id="sidebarResizer" class="sidebar-resizer"></div>
       <main class="workspace">
@@ -179,66 +147,6 @@
       </main>
     </div>
 
-    <!-- Custom Prompts Manager Modal -->
-    <div id="customPromptsModal" class="modal hidden">
-      <div class="modal__overlay"></div>
-      <div class="modal__content">
-        <div class="modal__header">
-          <h2>Manage Custom Prompts</h2>
-          <button id="closeModalBtn" class="modal__close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="modal__body">
-          <div id="customPromptsList" class="custom-prompts-list"></div>
-          <button id="addPromptBtn" class="add-prompt-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            <span>Add New Prompt</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Prompt Editor Modal -->
-    <div id="promptEditorModal" class="modal hidden">
-      <div class="modal__overlay"></div>
-      <div class="modal__content modal__content--large">
-        <div class="modal__header">
-          <h2 id="editorModalTitle">Add Custom Prompt</h2>
-          <button id="closeEditorBtn" class="modal__close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="modal__body">
-          <div class="form-group">
-            <label for="promptName">Prompt Name</label>
-            <input type="text" id="promptName" placeholder="e.g., Code Review" />
-          </div>
-          <div class="form-group">
-            <label for="promptDescription">Short Description</label>
-            <input type="text" id="promptDescription" placeholder="e.g., Review code for best practices" />
-          </div>
-          <div class="form-group">
-            <label for="promptContent">Prompt Content</label>
-            <textarea id="promptContent" rows="12" placeholder="Enter the full prompt text that will be sent to the AI..."></textarea>
-          </div>
-          <div class="modal__footer">
-            <button id="cancelPromptBtn" class="btn btn--secondary">Cancel</button>
-            <button id="savePromptBtn" class="btn btn--primary">Save Prompt</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Update Notification Toast -->
     <div id="updateNotification" class="update-toast hidden">
       <div class="update-toast__content">
@@ -262,6 +170,277 @@
           <div id="updateProgressFill" class="update-toast__progress-fill" style="width: 0%"></div>
         </div>
         <div id="updateProgressText" class="update-toast__progress-text">Downloading... 0%</div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal hidden">
+      <div class="modal__overlay"></div>
+      <div class="modal__content modal__content--settings">
+        <div class="modal__header">
+          <h2>Settings</h2>
+          <button id="closeSettingsBtn" class="modal__close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal__body modal__body--settings">
+          <div class="settings-container">
+            <div class="settings-tabs">
+              <button class="settings-tab active" data-tab="appearance">Appearance</button>
+              <button class="settings-tab" data-tab="terminal">Terminal</button>
+              <button class="settings-tab" data-tab="sessions">Sessions</button>
+              <button class="settings-tab" data-tab="git">Git/Worktrees</button>
+              <button class="settings-tab" data-tab="window">Window</button>
+              <button class="settings-tab" data-tab="updates">Updates</button>
+              <button class="settings-tab" data-tab="shortcuts">Shortcuts</button>
+              <button class="settings-tab" data-tab="advanced">Advanced</button>
+            </div>
+            <div class="settings-content">
+              <!-- Appearance Tab -->
+              <div class="settings-panel active" data-panel="appearance">
+                <h3>Appearance</h3>
+
+                <div class="settings-group">
+                  <label>Sidebar Default Width</label>
+                  <input type="number" id="sidebarWidth" min="200" max="600" value="300" />
+                  <span class="settings-hint">Default: 300px (min: 200px, max: 600px)</span>
+                </div>
+
+                <div class="settings-group">
+                  <label>Enable Animations</label>
+                  <input type="checkbox" id="enableAnimations" checked />
+                  <span class="settings-hint">Disable to improve performance</span>
+                </div>
+
+                <div class="settings-group">
+                  <label>Claude Accent Color</label>
+                  <input type="color" id="accentClaude" value="#ff6b35" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Codex Accent Color</label>
+                  <input type="color" id="accentCodex" value="#5899ff" />
+                </div>
+
+                <div class="settings-group">
+                  <label>OpenCode Accent Color</label>
+                  <input type="color" id="accentOpencode" value="#22c55e" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Gemini Accent Color</label>
+                  <input type="color" id="accentGemini" value="#8B7CFF" />
+                </div>
+              </div>
+
+              <!-- Terminal Tab -->
+              <div class="settings-panel" data-panel="terminal">
+                <h3>Terminal</h3>
+
+                <div class="settings-group">
+                  <label>Font Family</label>
+                  <input type="text" id="terminalFontFamily" value="JetBrains Mono, Cascadia Code, Fira Code, monospace" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Font Size</label>
+                  <input type="number" id="terminalFontSize" min="8" max="24" value="13" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Font Weight</label>
+                  <input type="number" id="terminalFontWeight" min="100" max="900" step="100" value="300" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Font Weight Bold</label>
+                  <input type="number" id="terminalFontWeightBold" min="100" max="900" step="100" value="600" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Cursor Style</label>
+                  <select id="terminalCursorStyle">
+                    <option value="bar">Bar</option>
+                    <option value="block">Block</option>
+                    <option value="underline">Underline</option>
+                  </select>
+                </div>
+
+                <div class="settings-group">
+                  <label>Cursor Blink</label>
+                  <input type="checkbox" id="terminalCursorBlink" checked />
+                </div>
+
+                <div class="settings-group">
+                  <label>Scrollback Buffer</label>
+                  <input type="number" id="terminalScrollback" min="100" max="10000" value="2000" />
+                  <span class="settings-hint">Number of lines to keep in history</span>
+                </div>
+
+                <div class="settings-group">
+                  <label>Background Color</label>
+                  <input type="color" id="terminalBgColor" value="#0d0d0d" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Foreground Color</label>
+                  <input type="color" id="terminalFgColor" value="#e8e8e8" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Cursor Color</label>
+                  <input type="color" id="terminalCursorColor" value="#ff6b35" />
+                </div>
+              </div>
+
+              <!-- Sessions Tab -->
+              <div class="settings-panel" data-panel="sessions">
+                <h3>Sessions</h3>
+
+                <div class="settings-group">
+                  <label>Claude Command</label>
+                  <input type="text" id="claudeCommand" value="claude --dangerously-skip-permissions" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Codex Command</label>
+                  <input type="text" id="codexCommand" value="codex --dangerously-bypass-approvals-and-sandbox" />
+                </div>
+
+                <div class="settings-group">
+                  <label>OpenCode Command</label>
+                  <input type="text" id="opencodeCommand" value="opencode" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Gemini Command</label>
+                  <input type="text" id="geminiCommand" value="gemini --yolo" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Activity Detection Sensitivity</label>
+                  <input type="range" id="activitySensitivity" min="0" max="1" step="0.1" value="0.5" />
+                  <span class="settings-hint">Lower = less sensitive</span>
+                </div>
+              </div>
+
+              <!-- Git/Worktrees Tab -->
+              <div class="settings-panel" data-panel="git">
+                <h3>Git & Worktrees</h3>
+
+                <div class="settings-group">
+                  <label>Worktree Directory</label>
+                  <input type="text" id="worktreeDir" value=".claudebox/worktrees" />
+                  <span class="settings-hint">Relative to repository root</span>
+                </div>
+
+                <div class="settings-group">
+                  <label>Main Branch Names</label>
+                  <input type="text" id="mainBranches" value="main, master" />
+                  <span class="settings-hint">Comma-separated list</span>
+                </div>
+              </div>
+
+              <!-- Window Tab -->
+              <div class="settings-panel" data-panel="window">
+                <h3>Window</h3>
+
+                <div class="settings-group">
+                  <label>Default Window Width</label>
+                  <input type="number" id="windowWidth" min="800" max="3840" value="1280" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Default Window Height</label>
+                  <input type="number" id="windowHeight" min="600" max="2160" value="820" />
+                </div>
+
+                <div class="settings-group">
+                  <label>Remember Window Size</label>
+                  <input type="checkbox" id="rememberWindowSize" />
+                  <span class="settings-hint">Save window size between sessions</span>
+                </div>
+              </div>
+
+              <!-- Updates Tab -->
+              <div class="settings-panel" data-panel="updates">
+                <h3>Updates</h3>
+
+                <div class="settings-group">
+                  <label>Auto-Check for Updates</label>
+                  <input type="checkbox" id="autoCheckUpdates" checked />
+                  <span class="settings-hint">Check for updates on startup</span>
+                </div>
+
+                <div class="settings-group">
+                  <label>Auto-Download Updates</label>
+                  <input type="checkbox" id="autoDownloadUpdates" />
+                  <span class="settings-hint">Automatically download updates when available</span>
+                </div>
+              </div>
+
+              <!-- Shortcuts Tab -->
+              <div class="settings-panel" data-panel="shortcuts">
+                <h3>Keyboard Shortcuts</h3>
+                <p class="settings-hint">Click on a shortcut to set a new key combination</p>
+
+                <div class="settings-group">
+                  <label>New Claude Session</label>
+                  <input type="text" id="shortcutNewClaude" placeholder="Not set" readonly />
+                </div>
+
+                <div class="settings-group">
+                  <label>New Codex Session</label>
+                  <input type="text" id="shortcutNewCodex" placeholder="Not set" readonly />
+                </div>
+
+                <div class="settings-group">
+                  <label>New Terminal Session</label>
+                  <input type="text" id="shortcutNewTerminal" placeholder="Not set" readonly />
+                </div>
+
+                <div class="settings-group">
+                  <label>Close Current Session</label>
+                  <input type="text" id="shortcutCloseSession" placeholder="Not set" readonly />
+                </div>
+
+                <div class="settings-group">
+                  <label>Toggle Sidebar</label>
+                  <input type="text" id="shortcutToggleSidebar" placeholder="Not set" readonly />
+                </div>
+              </div>
+
+              <!-- Advanced Tab -->
+              <div class="settings-panel" data-panel="advanced">
+                <h3>Advanced</h3>
+
+                <div class="settings-group">
+                  <label>Enable Hardware Acceleration</label>
+                  <input type="checkbox" id="hardwareAcceleration" />
+                  <span class="settings-hint">Requires restart</span>
+                </div>
+
+                <div class="settings-group">
+                  <label>Debug Mode</label>
+                  <input type="checkbox" id="debugMode" />
+                  <span class="settings-hint">Show developer console on startup</span>
+                </div>
+
+                <div class="settings-group">
+                  <label>Git Command Timeout (ms)</label>
+                  <input type="number" id="gitTimeout" min="1000" max="60000" value="10000" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button id="resetSettingsBtn" class="btn btn--secondary">Reset to Defaults</button>
+            <button id="saveSettingsBtn" class="btn btn--primary">Save Settings</button>
+          </div>
+        </div>
       </div>
     </div>
 
