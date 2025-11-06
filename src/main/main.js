@@ -619,6 +619,11 @@ function getEnhancedPath() {
 
   // Unix-like systems (Linux/macOS)
   if (process.platform !== 'win32') {
+    // CRITICAL: Add paths where Node.js binary might be located
+    // These are needed for npm-installed CLI tools that use #!/usr/bin/env node
+    additionalPaths.push('/usr/local/bin');     // Common on Intel Macs
+    additionalPaths.push('/opt/homebrew/bin');  // Common on Apple Silicon Macs
+
     const nvmPath = path.join(homeDir, '.nvm/versions/node');
     const npmGlobalPath = path.join(homeDir, '.npm-global/bin');
 
@@ -1005,7 +1010,8 @@ function registerIpcHandlers() {
       let sessionBranch = branchName || null;
 
       // Auto-detect if we're already in a worktree (even without branch mode)
-      if (!worktreeMode && sessionBranch) {
+      // BUT only if no branch was explicitly selected from the UI
+      if (!worktreeMode && !sessionBranch) {
         try {
           const isRepo = await isGitRepo(sessionCwd);
           if (isRepo) {
@@ -1111,6 +1117,25 @@ function registerIpcHandlers() {
               repoRoot: await getRepoRoot(cwd)
             };
           }
+        }
+      }
+
+      // If branch was explicitly selected but worktreeMode is off, checkout to that branch
+      if (!worktreeMode && branchName && sessionBranch) {
+        try {
+          const isRepo = await isGitRepo(sessionCwd);
+          if (isRepo) {
+            const currentBranch = await getCurrentBranch(sessionCwd);
+            if (currentBranch !== branchName) {
+              log(`Switching from branch ${currentBranch} to ${branchName}`);
+              // Check out the selected branch
+              await exec(`git checkout ${branchName}`, { cwd: sessionCwd });
+              sessionBranch = branchName;
+            }
+          }
+        } catch (error) {
+          log(`Failed to checkout branch ${branchName}: ${error.message}`);
+          // Continue with session creation even if branch switch fails
         }
       }
 
@@ -1342,7 +1367,9 @@ function registerIpcHandlers() {
       autoHideMenuBar: true,
       webPreferences: {
         nodeIntegration: true,
-        contextIsolation: false
+        contextIsolation: false,
+        // Disable web security to allow inline scripts in data URLs
+        webSecurity: false
       }
     });
 
@@ -1416,37 +1443,92 @@ function registerIpcHandlers() {
         <h3>Enter branch name:</h3>
         <input type="text" id="branchInput" placeholder="e.g., feature/my-new-feature" autofocus />
         <div class="buttons">
-          <button class="secondary" onclick="cancel()">Cancel</button>
-          <button class="primary" onclick="submit()">Create Branch</button>
+          <button class="secondary" id="cancelBtn">Cancel</button>
+          <button class="primary" id="submitBtn">Create Branch</button>
         </div>
         <script>
           const { ipcRenderer } = require('electron');
-          const input = document.getElementById('branchInput');
 
-          input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-              submit();
-            } else if (e.key === 'Escape') {
-              cancel();
-            }
-          });
-
-          function submit() {
+          // Make functions global so they're accessible everywhere
+          window.submit = function() {
+            console.log('SUBMIT CALLED');
+            const input = document.getElementById('branchInput');
             const value = input.value.trim();
             if (value) {
               ipcRenderer.send('branch-name-result', value);
               window.close();
             }
-          }
+          };
 
-          function cancel() {
+          window.cancel = function() {
+            console.log('CANCEL CALLED');
             ipcRenderer.send('branch-name-result', null);
             window.close();
+          };
+
+          // Execute immediately (script is at end of body, DOM is ready)
+          const input = document.getElementById('branchInput');
+          const cancelBtn = document.getElementById('cancelBtn');
+          const submitBtn = document.getElementById('submitBtn');
+
+          console.log('Elements found:', {
+            input: !!input,
+            cancelBtn: !!cancelBtn,
+            submitBtn: !!submitBtn
+          });
+
+          // Try multiple event types
+          if (cancelBtn) {
+            cancelBtn.onclick = function(e) {
+              console.log('Cancel onclick fired');
+              window.cancel();
+            };
+            cancelBtn.addEventListener('click', function(e) {
+              console.log('Cancel addEventListener click fired');
+              window.cancel();
+            });
+            cancelBtn.addEventListener('mousedown', function(e) {
+              console.log('Cancel mousedown fired');
+              window.cancel();
+            });
           }
+
+          if (submitBtn) {
+            submitBtn.onclick = function(e) {
+              console.log('Submit onclick fired');
+              window.submit();
+            };
+            submitBtn.addEventListener('click', function(e) {
+              console.log('Submit addEventListener click fired');
+              window.submit();
+            });
+          }
+
+          if (input) {
+            input.onkeypress = function(e) {
+              if (e.key === 'Enter') {
+                console.log('Enter key pressed');
+                window.submit();
+              }
+            };
+          }
+
+          document.onkeydown = function(e) {
+            if (e.key === 'Escape') {
+              console.log('Escape key pressed');
+              window.cancel();
+            }
+          };
+
+          // Log that script loaded
+          console.log('Branch dialog script loaded');
         </script>
       </body>
       </html>
     `)}`);
+
+    // Open DevTools for debugging
+    inputWin.webContents.openDevTools({ mode: 'detach' });
 
     return new Promise((resolve) => {
       const { ipcMain } = require('electron');
