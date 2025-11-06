@@ -100,10 +100,39 @@ npm run build:linux    # Linux
 3. Run the installer or portable executable
 
 #### macOS
-1. Build: `npm run build:mac`
-2. Open the `.dmg` file from `dist/`
-3. Drag ClaudeBox to Applications folder
-4. Allow app in System Preferences if prompted
+
+**Note:** ClaudeBox is currently unsigned. macOS Gatekeeper will block it when downloaded from the internet. Follow these steps:
+
+**Option 1: Automated Install Script (Easiest)**
+```bash
+# Download from GitHub releases, then:
+curl -sSL https://raw.githubusercontent.com/samkleespies/claudebox/main/scripts/install-macos.sh | bash
+```
+This automatically removes quarantine and installs to /Applications.
+
+**Option 2: Manual Quarantine Removal**
+```bash
+# Download the DMG from GitHub releases
+cd ~/Downloads
+xattr -cr claudebox-*-macos-*.dmg
+# Now open the DMG and install normally
+```
+
+**Option 3: System Settings Method**
+1. Download and double-click the DMG
+2. Drag ClaudeBox to Applications
+3. Try to open ClaudeBox (it will be blocked)
+4. Go to System Settings > Privacy & Security
+5. Scroll down to Security section
+6. Click "Open Anyway" next to the ClaudeBox message
+7. Confirm by clicking "Open" in the dialog
+
+**Option 4: Build From Source**
+```bash
+npm run build:mac
+# The locally-built app will not have quarantine flags
+open dist/*.dmg
+```
 
 #### Linux
 
@@ -276,6 +305,27 @@ Custom prompts are stored in:
 Sessions are ephemeral and stored in memory. Future versions may add session persistence.
 
 ## Troubleshooting
+
+### macOS: "App is damaged" or "Move to Trash" Error
+
+This occurs because ClaudeBox is unsigned and macOS Gatekeeper blocks internet downloads. **Solutions:**
+
+**Quick Fix:**
+```bash
+cd ~/Downloads
+xattr -cr claudebox-*.dmg
+```
+Then open the DMG normally.
+
+**If already copied to Applications:**
+```bash
+xattr -cr /Applications/ClaudeBox.app
+```
+Then launch from Applications.
+
+**Why this happens:** When you download files from the internet, macOS adds a "quarantine" flag. For unsigned apps, Gatekeeper enforces strict security checks on quarantined files. Removing the flag allows the app to run.
+
+**Note:** Future versions will include code signing to eliminate this step.
 
 ### AI Tool Not Found
 If a tool installation dialog appears:
