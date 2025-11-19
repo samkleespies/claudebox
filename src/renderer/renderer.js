@@ -1601,7 +1601,23 @@ window.addEventListener('DOMContentLoaded', async () => {
   const updateProgressFill = document.getElementById('updateProgressFill');
   const updateProgressText = document.getElementById('updateProgressText');
 
+  const UpdateAction = {
+    DOWNLOAD: 'download',
+    INSTALL: 'install'
+  };
+
   let currentUpdateVersion = null;
+  let currentUpdateAction = UpdateAction.DOWNLOAD;
+
+  function setDownloadButtonState(action) {
+    currentUpdateAction = action;
+    downloadUpdateBtn.disabled = false;
+    if (action === UpdateAction.DOWNLOAD) {
+      downloadUpdateBtn.textContent = 'Download';
+    } else {
+      downloadUpdateBtn.textContent = 'Restart & Install';
+    }
+  }
 
   /**
    * Show update notification
@@ -1610,8 +1626,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     currentUpdateVersion = version;
     updateTitle.textContent = 'Update Available';
     updateMessage.textContent = message || `Version ${version} is ready to download`;
+    setDownloadButtonState(UpdateAction.DOWNLOAD);
     updateNotification.classList.remove('hidden');
     updateProgress.classList.add('hidden');
+    updateProgressFill.style.width = '0%';
+    updateProgressText.textContent = '';
   }
 
   /**
@@ -1639,13 +1658,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   function showUpdateReady(version) {
     updateTitle.textContent = 'Update Ready';
     updateMessage.textContent = `Version ${version} has been downloaded and is ready to install`;
-    downloadUpdateBtn.textContent = 'Restart & Install';
-    downloadUpdateBtn.onclick = async () => {
-      const { installUpdate } = window.claudebox || {};
-      if (installUpdate) {
-        await installUpdate();
-      }
-    };
+    setDownloadButtonState(UpdateAction.INSTALL);
+    updateProgress.classList.remove('hidden');
   }
 
   // Handle update available event
@@ -1679,6 +1693,22 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Download update button
   downloadUpdateBtn.addEventListener('click', async () => {
+    if (currentUpdateAction === UpdateAction.INSTALL) {
+      const { installUpdate } = window.claudebox || {};
+      if (!installUpdate) return;
+
+      downloadUpdateBtn.disabled = true;
+      downloadUpdateBtn.textContent = 'Restarting...';
+      try {
+        await installUpdate();
+      } catch (error) {
+        console.error('[renderer] Failed to install update', error);
+        alert(`Failed to install update: ${error.message}`);
+        setDownloadButtonState(UpdateAction.INSTALL);
+      }
+      return;
+    }
+
     const { downloadUpdate } = window.claudebox || {};
     if (!downloadUpdate) return;
 
@@ -1689,8 +1719,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       console.error('[renderer] Failed to download update', error);
       alert(`Failed to download update: ${error.message}`);
-      downloadUpdateBtn.disabled = false;
-      downloadUpdateBtn.textContent = 'Download';
+      setDownloadButtonState(UpdateAction.DOWNLOAD);
     }
   });
 
