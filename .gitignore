@@ -93,6 +93,7 @@ worktree-*/
 
 # Playwright MCP (runtime data)
 .playwright-mcp/
+.claude/
 
 # Package manager locks (keep package-lock.json, ignore others)
 yarn.lock

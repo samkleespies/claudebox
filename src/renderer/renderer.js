@@ -4,6 +4,11 @@ import '@xterm/xterm/css/xterm.css';
 
 const API_POLL_INTERVAL_MS = 50;
 const API_TIMEOUT_MS = 5000;
+const MAX_SESSION_BUFFER_CHARS = 50000;
+const ACTIVITY_SPINNER_PATTERN = /[\u2800-\u28FF]/;
+const ANSI_ESCAPE_PATTERN = /\x1b\[[0-9;]*[a-zA-Z]/g;
+const OSC_SEQUENCE_PATTERN = /\x1b\][0-9;]*\x07/g;
+const BRANCH_INFO_DEBOUNCE_MS = 450;
 
 function waitForApi(timeoutMs = API_TIMEOUT_MS) {
   // If already available, return immediately
@@ -286,6 +291,33 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   const findSession = (id) => state.sessions.find((session) => session.id === id);
 
+  // Session buffer management functions
+  function initializeSessionBuffer(session) {
+    session.bufferChunks = [];
+    session.bufferSize = 0;
+  }
+
+  function appendToBufferedOutput(session, data) {
+    if (!session.bufferChunks) {
+      initializeSessionBuffer(session);
+    }
+    session.bufferChunks.push(data);
+    session.bufferSize += data.length;
+
+    // Trim old chunks if buffer exceeds limit
+    while (session.bufferSize > MAX_SESSION_BUFFER_CHARS && session.bufferChunks.length > 1) {
+      const removed = session.bufferChunks.shift();
+      session.bufferSize -= removed.length;
+    }
+  }
+
+  function getBufferedOutput(session) {
+    if (!session.bufferChunks || session.bufferChunks.length === 0) {
+      return '';
+    }
+    return session.bufferChunks.join('');
+  }
+
   function updateEmptyState() {
     if (state.activeSessionId) {
       elements.emptyStateEl.classList.add('hidden');
@@ -294,6 +326,22 @@ window.addEventListener('DOMContentLoaded', async () => {
       elements.emptyStateEl.classList.remove('hidden');
       elements.terminalHostEl.classList.add('no-session');
     }
+  }
+
+  function updateActiveSessionUI() {
+    state.sessions.forEach((session) => {
+      const item = elements.sessionListEl.querySelector(`[data-session-id="${session.id}"]`);
+      if (!item) return;
+
+      if (session.id === state.activeSessionId) {
+        item.classList.add('active');
+        item.classList.remove('unread');
+        session.hasActivity = false;
+      } else {
+        item.classList.remove('active');
+        item.classList.toggle('unread', !!session.hasActivity);
+      }
+    });
   }
 
   function setActionButtonsDisabled(disabled) {
@@ -311,207 +359,211 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.documentElement.style.setProperty('--sidebar-resizer-width', widthValue);
   }
 
+  function createSessionListItem(session) {
+    const li = document.createElement('li');
+    li.className = 'session-item';
+    li.dataset.sessionId = session.id;
+
+    // Add session type class
+    li.classList.add(`session-item--${session.type}`);
+
+    if (session.id === state.activeSessionId) {
+      li.classList.add('active');
+    }
+
+    if (session.hasActivity && session.id !== state.activeSessionId) {
+      li.classList.add('unread');
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'session-item__meta';
+
+    // Create title wrapper with icon
+    const titleWrapper = document.createElement('div');
+    titleWrapper.className = 'session-item__title-wrapper';
+
+    const icon = document.createElement('img');
+    icon.className = 'session-item__icon';
+    let iconSrc = './images/gpt-icon.svg';
+    if (session.type === 'claude') {
+      iconSrc = './images/claude-icon.svg';
+    } else if (session.type === 'opencode') {
+      iconSrc = './images/opencode-logo.svg';
+    } else if (session.type === 'gemini') {
+      iconSrc = './images/gemini-icon.svg';
+    } else if (session.type === 'terminal') {
+      iconSrc = './images/terminal-icon.svg';
+    }
+    icon.src = iconSrc;
+    icon.alt = `${session.type} icon`;
+
+    const title = document.createElement('p');
+    title.className = 'session-item__title';
+    title.textContent = session.title;
+
+    // Add double-click to rename functionality
+    title.addEventListener('dblclick', async (e) => {
+      e.stopPropagation();
+
+      const currentTitle = session.title;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentTitle;
+      input.className = 'session-item__title-input';
+      input.spellcheck = false;
+
+      // Set dynamic width based on text content
+      const measureText = (text) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        context.font = window.getComputedStyle(input).font;
+        return Math.ceil(context.measureText(text || 'a').width);
+      };
+
+      const updateWidth = () => {
+        const textWidth = measureText(input.value);
+        input.style.width = `${textWidth}px`;
+      };
+
+      // Replace title with input
+      title.style.display = 'none';
+      titleWrapper.insertBefore(input, title);
+
+      // Set initial width after element is in DOM
+      updateWidth();
+
+      input.focus();
+      input.select();
+
+      // Update width as user types
+      input.addEventListener('input', updateWidth);
+
+      const finishEditing = async (save) => {
+        if (save && input.value.trim() && input.value !== currentTitle) {
+          const newTitle = input.value.trim();
+          try {
+            await renameSession(session.id, newTitle);
+            session.title = newTitle;
+            title.textContent = newTitle;
+          } catch (error) {
+            console.error('[renderer] Failed to rename session', error);
+            title.textContent = currentTitle;
+          }
+        }
+        input.remove();
+        title.style.display = '';
+      };
+
+      input.addEventListener('blur', () => finishEditing(true));
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          finishEditing(true);
+        } else if (event.key === 'Escape') {
+          finishEditing(false);
+        }
+      });
+    });
+
+    titleWrapper.appendChild(icon);
+    titleWrapper.appendChild(title);
+
+    // Add branch badge next to title if session has branch info
+    if (session.branch) {
+      const branchBadge = document.createElement('span');
+      branchBadge.className = 'session-item__branch-badge';
+      branchBadge.textContent = `⎇ ${session.branch}`;
+
+      // Add worktree indicator
+      if (session.worktree && session.worktree.enabled) {
+        if (session.worktree.isMain) {
+          branchBadge.classList.add('session-item__branch-badge--main');
+          branchBadge.title = `Main branch (${session.cwd})`;
+        } else {
+          branchBadge.classList.add('session-item__branch-badge--worktree');
+          branchBadge.title = `Worktree: ${session.worktree.path}`;
+        }
+      }
+
+      titleWrapper.appendChild(branchBadge);
+    }
+
+    const path = document.createElement('p');
+    path.className = 'session-item__path';
+    path.textContent = session.cwd || '';
+
+    meta.appendChild(titleWrapper);
+    meta.appendChild(path);
+
+    const statusColumn = document.createElement('div');
+    statusColumn.className = 'session-item__status-column';
+
+    const timestamp = document.createElement('span');
+    timestamp.className = 'session-item__timestamp';
+    const timeStr = new Date(session.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    timestamp.textContent = timeStr;
+
+    const status = document.createElement('span');
+    status.className = 'session-item__status';
+
+    // Activity-aware status display
+    if (session.status === 'running') {
+      const activityLabels = {
+        idle: 'Idle',
+        thinking: 'Thinking',
+        working: 'Working',
+        responding: 'Responding'
+      };
+      status.textContent = activityLabels[session.activityState] || 'Idle';
+      status.classList.add('session-item__status--running');
+
+      // Add activity-specific class for animations
+      if (session.activityState !== 'idle') {
+        status.classList.add(`session-item__status--${session.activityState}`);
+      }
+    } else if (session.status === 'exited') {
+      status.textContent = 'Exited';
+      status.classList.add('session-item__status--exited');
+    } else {
+      status.textContent = 'Stopping';
+    }
+
+    statusColumn.appendChild(status);
+    statusColumn.appendChild(timestamp);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'session-item__delete';
+    deleteBtn.innerHTML = `
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+        <path d="M5.5 1.5h5M2 4h12M3.5 4l.5 9.5a1 1 0 001 1h6a1 1 0 001-1L13 4M6.5 7v4M9.5 7v4"
+              stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await dispose(session.id);
+      } finally {
+        removeSessionFromState(session.id);
+      }
+    });
+
+    li.appendChild(meta);
+    li.appendChild(statusColumn);
+    li.appendChild(deleteBtn);
+
+    li.addEventListener('click', () => {
+      if (session.id !== state.activeSessionId) {
+        setActiveSession(session.id);
+      }
+    });
+
+    return li;
+  }
+
   function renderSessionList() {
     elements.sessionListEl.innerHTML = '';
-
     state.sessions.forEach((session) => {
-      const li = document.createElement('li');
-      li.className = 'session-item';
-
-      // Add session type class
-      li.classList.add(`session-item--${session.type}`);
-
-      if (session.id === state.activeSessionId) {
-        li.classList.add('active');
-      }
-
-      if (session.hasActivity && session.id !== state.activeSessionId) {
-        li.classList.add('unread');
-      }
-
-      const meta = document.createElement('div');
-      meta.className = 'session-item__meta';
-
-      // Create title wrapper with icon
-      const titleWrapper = document.createElement('div');
-      titleWrapper.className = 'session-item__title-wrapper';
-
-      const icon = document.createElement('img');
-      icon.className = 'session-item__icon';
-      let iconSrc = './images/gpt-icon.svg';
-      if (session.type === 'claude') {
-        iconSrc = './images/claude-icon.svg';
-      } else if (session.type === 'opencode') {
-        iconSrc = './images/opencode-logo.svg';
-      } else if (session.type === 'gemini') {
-        iconSrc = './images/gemini-icon.svg';
-      } else if (session.type === 'terminal') {
-        iconSrc = './images/terminal-icon.svg';
-      }
-      icon.src = iconSrc;
-      icon.alt = `${session.type} icon`;
-
-      const title = document.createElement('p');
-      title.className = 'session-item__title';
-      title.textContent = session.title;
-
-      // Add double-click to rename functionality
-      title.addEventListener('dblclick', async (e) => {
-        e.stopPropagation();
-
-        const currentTitle = session.title;
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = currentTitle;
-        input.className = 'session-item__title-input';
-        input.spellcheck = false;
-
-        // Set dynamic width based on text content
-        const measureText = (text) => {
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          context.font = window.getComputedStyle(input).font;
-          return Math.ceil(context.measureText(text || 'a').width);
-        };
-
-        const updateWidth = () => {
-          const textWidth = measureText(input.value);
-          input.style.width = `${textWidth}px`;
-        };
-
-        // Replace title with input
-        title.style.display = 'none';
-        titleWrapper.insertBefore(input, title);
-
-        // Set initial width after element is in DOM
-        updateWidth();
-
-        input.focus();
-        input.select();
-
-        // Update width as user types
-        input.addEventListener('input', updateWidth);
-
-        const finishEditing = async (save) => {
-          if (save && input.value.trim() && input.value !== currentTitle) {
-            const newTitle = input.value.trim();
-            try {
-              await renameSession(session.id, newTitle);
-              session.title = newTitle;
-              title.textContent = newTitle;
-            } catch (error) {
-              console.error('[renderer] Failed to rename session', error);
-              title.textContent = currentTitle;
-            }
-          }
-          input.remove();
-          title.style.display = '';
-        };
-
-        input.addEventListener('blur', () => finishEditing(true));
-        input.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter') {
-            finishEditing(true);
-          } else if (event.key === 'Escape') {
-            finishEditing(false);
-          }
-        });
-      });
-
-      titleWrapper.appendChild(icon);
-      titleWrapper.appendChild(title);
-
-      // Add branch badge next to title if session has branch info
-      if (session.branch) {
-        const branchBadge = document.createElement('span');
-        branchBadge.className = 'session-item__branch-badge';
-        branchBadge.textContent = `⎇ ${session.branch}`;
-
-        // Add worktree indicator
-        if (session.worktree && session.worktree.enabled) {
-          if (session.worktree.isMain) {
-            branchBadge.classList.add('session-item__branch-badge--main');
-            branchBadge.title = `Main branch (${session.cwd})`;
-          } else {
-            branchBadge.classList.add('session-item__branch-badge--worktree');
-            branchBadge.title = `Worktree: ${session.worktree.path}`;
-          }
-        }
-
-        titleWrapper.appendChild(branchBadge);
-      }
-
-      const path = document.createElement('p');
-      path.className = 'session-item__path';
-      path.textContent = session.cwd || '';
-
-      meta.appendChild(titleWrapper);
-      meta.appendChild(path);
-
-      const statusColumn = document.createElement('div');
-      statusColumn.className = 'session-item__status-column';
-
-      const timestamp = document.createElement('span');
-      timestamp.className = 'session-item__timestamp';
-      const timeStr = new Date(session.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      timestamp.textContent = timeStr;
-
-      const status = document.createElement('span');
-      status.className = 'session-item__status';
-
-      // Activity-aware status display
-      if (session.status === 'running') {
-        const activityLabels = {
-          idle: 'Idle',
-          thinking: 'Thinking',
-          working: 'Working',
-          responding: 'Responding'
-        };
-        status.textContent = activityLabels[session.activityState] || 'Idle';
-        status.classList.add('session-item__status--running');
-
-        // Add activity-specific class for animations
-        if (session.activityState !== 'idle') {
-          status.classList.add(`session-item__status--${session.activityState}`);
-        }
-      } else if (session.status === 'exited') {
-        status.textContent = 'Exited';
-        status.classList.add('session-item__status--exited');
-      } else {
-        status.textContent = 'Stopping';
-      }
-
-      statusColumn.appendChild(status);
-      statusColumn.appendChild(timestamp);
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'session-item__delete';
-      deleteBtn.innerHTML = `
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <path d="M5.5 1.5h5M2 4h12M3.5 4l.5 9.5a1 1 0 001 1h6a1 1 0 001-1L13 4M6.5 7v4M9.5 7v4"
-                stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      `;
-      deleteBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        try {
-          await dispose(session.id);
-        } finally {
-          removeSessionFromState(session.id);
-        }
-      });
-
-      li.appendChild(meta);
-      li.appendChild(statusColumn);
-      li.appendChild(deleteBtn);
-
-      li.addEventListener('click', () => {
-        if (session.id !== state.activeSessionId) {
-          setActiveSession(session.id);
-        }
-      });
-
-      elements.sessionListEl.appendChild(li);
+      elements.sessionListEl.appendChild(createSessionListItem(session));
     });
   }
 
@@ -521,7 +573,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    session.buffer = (session.buffer || '') + data;
+    appendToBufferedOutput(session, data);
 
     // Detect activity state from terminal output for all sessions
     updateSessionActivity(session, data);
@@ -577,10 +629,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     terminal.reset();
-    terminal.write(session.buffer || '');
+    terminal.write(getBufferedOutput(session));
     terminal.focus();
     fitAndNotify();
-    renderSessionList();
+    updateActiveSessionUI();
     updateEmptyState();
   }
 
@@ -724,7 +776,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   function addSession(sessionInfo) {
     const session = {
       ...sessionInfo,
-      buffer: '',
       hasActivity: false,
       activityState: 'idle',  // idle | thinking | working | responding
       activityTimeout: null,
@@ -733,8 +784,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       chunkWindowMs: 1000,  // 1 second context window
     };
 
+    initializeSessionBuffer(session);
     state.sessions.push(session);
-    renderSessionList();
+    elements.sessionListEl.appendChild(createSessionListItem(session));
     setActiveSession(session.id);
   }
 
@@ -765,7 +817,11 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    renderSessionList();
+    // Remove the DOM element
+    const listItem = elements.sessionListEl.querySelector(`[data-session-id="${id}"]`);
+    if (listItem) {
+      listItem.remove();
+    }
   }
 
   function showInstallDialog(toolName, toolType, onInstall, onCancel) {
@@ -2037,7 +2093,15 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    renderSessionList();
+    session.status = 'exited';
+    const listItem = elements.sessionListEl.querySelector(`[data-session-id="${id}"]`);
+    if (listItem) {
+      const statusEl = listItem.querySelector('.session-item__status');
+      if (statusEl) {
+        statusEl.textContent = 'Exited';
+        statusEl.className = 'session-item__status session-item__status--exited';
+      }
+    }
   }));
 
   window.addEventListener('beforeunload', () => {

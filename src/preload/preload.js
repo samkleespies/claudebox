@@ -29,7 +29,6 @@ contextBridge.exposeInMainWorld('claudebox', {
   windowClose: () => invoke('window:close'),
   // Directory selection
   selectDirectory: () => invoke('dialog:selectDirectory'),
-  getBranchNameDialog: () => invoke('dialog:getBranchName'),
   // External terminal
   openExternalTerminal: (cwd) => invoke('terminal:open', { cwd }),
   // System

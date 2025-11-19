@@ -173,6 +173,49 @@
       </div>
     </div>
 
+    <!-- Notification Dialog -->
+    <div id="notificationDialog" class="notification-dialog hidden">
+      <div class="notification-dialog__overlay"></div>
+      <div class="notification-dialog__content">
+        <div class="notification-dialog__icon">
+          <svg id="notificationIcon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Icon changes based on type -->
+          </svg>
+        </div>
+        <div class="notification-dialog__message" id="notificationMessage"></div>
+        <div class="notification-dialog__buttons" id="notificationButtons">
+          <button class="btn btn--primary" id="notificationOkBtn">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Branch Prompt Modal -->
+    <div id="branchPromptModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal__overlay"></div>
+      <div class="modal__content modal__content--prompt">
+        <div class="modal__header">
+          <h2>Create Worktree Branch</h2>
+          <button id="branchPromptClose" class="modal__close" aria-label="Close branch prompt">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="form-group">
+            <label for="branchPromptInput">Branch name</label>
+            <input type="text" id="branchPromptInput" placeholder="e.g., feature/my-new-feature" autocomplete="off" />
+            <div id="branchPromptError" class="branch-prompt__error hidden">Branch name is required.</div>
+          </div>
+          <div class="modal__footer">
+            <button id="branchPromptCancel" class="btn btn--secondary">Cancel</button>
+            <button id="branchPromptConfirm" class="btn btn--primary">Create Branch</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Settings Modal -->
     <div id="settingsModal" class="modal hidden">
       <div class="modal__overlay"></div>
