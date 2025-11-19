@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const fsPromises = fs.promises;
 const pty = require('@homebridge/node-pty-prebuilt-multiarch');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
@@ -1615,16 +1617,31 @@ function registerIpcHandlers() {
 
   // Settings storage
   const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+  const ensureSettingsDir = async () => {
+    await fsPromises.mkdir(path.dirname(settingsPath), { recursive: true });
+  };
+  const settingsFileExists = async () => {
+    try {
+      await fsPromises.access(settingsPath, fs.constants.F_OK);
+      return true;
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    }
+  };
 
   // Load settings
   ipcMain.handle('settings:load', async () => {
     try {
-      if (fs.existsSync(settingsPath)) {
-        const data = fs.readFileSync(settingsPath, 'utf8');
-        const settings = JSON.parse(data);
-        return { settings };
+      await ensureSettingsDir();
+      if (!(await settingsFileExists())) {
+        return { settings: {} };
       }
-      return { settings: {} };
+      const data = await fsPromises.readFile(settingsPath, 'utf8');
+      const settings = JSON.parse(data);
+      return { settings };
     } catch (error) {
       reportError('failed to load settings', error);
       return { settings: {}, error: error.message };
@@ -1634,7 +1651,8 @@ function registerIpcHandlers() {
   // Save settings
   ipcMain.handle('settings:save', async (_event, { settings }) => {
     try {
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+      await ensureSettingsDir();
+      await fsPromises.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
       return { success: true };
     } catch (error) {
       reportError('failed to save settings', error);
