@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const pty = require('@homebridge/node-pty-prebuilt-multiarch');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 
 // Configure caches and GPU behavior as early as possible
@@ -21,12 +21,28 @@ try {
 
 // Avoid shader disk cache errors/noise
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+// Prevent Windows 11 rounded corners from clipping fullscreen workspace when sidebar is hidden
+app.commandLine.appendSwitch('disable-features', 'WindowsRoundedCorners');
 
 // Configuration constants
 const CLAUDE_COMMAND = 'claude --dangerously-skip-permissions';
 const CODEX_COMMAND = 'codex --dangerously-bypass-approvals-and-sandbox';
 const OPENCODE_COMMAND = 'opencode';
 const GEMINI_COMMAND = 'gemini --yolo';
+
+const SESSION_DEFAULT_COMMANDS = {
+  claude: CLAUDE_COMMAND,
+  codex: CODEX_COMMAND,
+  opencode: OPENCODE_COMMAND,
+  gemini: GEMINI_COMMAND
+};
+
+const SESSION_COMMAND_SETTING_KEYS = {
+  claude: 'claudeCommand',
+  codex: 'codexCommand',
+  opencode: 'opencodeCommand',
+  gemini: 'geminiCommand'
+};
 
 // Tool installation configuration
 const TOOL_CONFIG = {
@@ -79,10 +95,76 @@ let sessionCounter = 0;
 
 // Tool installation cache - stores check results to avoid repeated checks
 const toolInstallCache = new Map();
+let settingsPathCache = null;
+let settingsCache = null;
 
 const log = (...args) => console.log('[main]', ...args);
 const warn = (...args) => console.warn('[main]', ...args);
 const reportError = (...args) => console.error('[main]', ...args);
+
+function getSettingsFilePath() {
+  if (!settingsPathCache) {
+    settingsPathCache = path.join(app.getPath('userData'), 'settings.json');
+  }
+  return settingsPathCache;
+}
+
+function ensureSettingsDirSync() {
+  const dir = path.dirname(getSettingsFilePath());
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+async function ensureSettingsDirAsync() {
+  await fsPromises.mkdir(path.dirname(getSettingsFilePath()), { recursive: true });
+}
+
+function loadSettingsSync() {
+  try {
+    ensureSettingsDirSync();
+    const filePath = getSettingsFilePath();
+    if (!fs.existsSync(filePath)) {
+      return {};
+    }
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    reportError('failed to load settings from disk', error);
+    return {};
+  }
+}
+
+function getCachedSettings() {
+  if (!settingsCache) {
+    settingsCache = loadSettingsSync();
+  }
+  return settingsCache;
+}
+
+function updateSettingsCache(newSettings) {
+  settingsCache = newSettings ? { ...newSettings } : {};
+}
+
+async function readSettingsFileAsync() {
+  const filePath = getSettingsFilePath();
+  await ensureSettingsDirAsync();
+  try {
+    await fsPromises.access(filePath, fs.constants.F_OK);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {};
+    }
+    throw error;
+  }
+  const data = await fsPromises.readFile(filePath, 'utf8');
+  return JSON.parse(data);
+}
+
+async function writeSettingsFileAsync(settings) {
+  await ensureSettingsDirAsync();
+  await fsPromises.writeFile(getSettingsFilePath(), JSON.stringify(settings, null, 2), 'utf8');
+}
 
 /**
  * Git integration utilities
@@ -675,7 +757,6 @@ async function checkToolInstalled(type, skipCache = false) {
 
   // Perform actual check with enhanced PATH
   return new Promise((resolve) => {
-    const { exec } = require('child_process');
     const env = { ...process.env, PATH: getEnhancedPath() };
 
     exec(config.checkCommand, { timeout: 5000, env }, (error, stdout, stderr) => {
@@ -721,7 +802,6 @@ async function installTool(type) {
   }
 
   return new Promise((resolve) => {
-    const { exec } = require('child_process');
     const env = { ...process.env, PATH: getEnhancedPath() };
     log(`Installing ${config.displayName}...`);
 
@@ -752,15 +832,33 @@ async function installTool(type) {
   });
 }
 
+function getSessionCommand(type) {
+  if (type === 'terminal') {
+    return null;
+  }
+
+  const defaultCommand = SESSION_DEFAULT_COMMANDS[type];
+  if (!defaultCommand) {
+    return null;
+  }
+
+  const settingKey = SESSION_COMMAND_SETTING_KEYS[type];
+  const settings = getCachedSettings();
+  const override = settingKey ? settings?.[settingKey] : null;
+
+  if (typeof override === 'string' && override.trim().length > 0) {
+    return override.trim();
+  }
+
+  return defaultCommand;
+}
+
 function buildSessionMetadata(type) {
   if (!['claude', 'codex', 'opencode', 'gemini', 'terminal'].includes(type)) {
     throw new Error(`Unsupported session type: ${type}`);
   }
 
-  const command = type === 'claude' ? CLAUDE_COMMAND :
-                  (type === 'codex' ? CODEX_COMMAND :
-                  (type === 'opencode' ? OPENCODE_COMMAND :
-                  (type === 'gemini' ? GEMINI_COMMAND : null)));
+  const command = getSessionCommand(type);
   const title = type === 'claude' ? 'Claude Code' :
                 (type === 'codex' ? 'Codex' :
                 (type === 'opencode' ? 'OpenCode' :
@@ -864,6 +962,7 @@ function createWindow() {
     autoHideMenuBar: true,  // Hide the menu bar
     show: false,  // Don't show until ready (prevents flash)
     backgroundColor: '#0d0d0d',  // Match app background
+    roundedCorners: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -1529,9 +1628,6 @@ function registerIpcHandlers() {
       </html>
     `)}`);
 
-    // Open DevTools for debugging
-    inputWin.webContents.openDevTools({ mode: 'detach' });
-
     return new Promise((resolve) => {
       const { ipcMain } = require('electron');
 
@@ -1556,12 +1652,9 @@ function registerIpcHandlers() {
 
       if (process.platform === 'win32') {
         // Prefer PowerShell in a new window via cmd's start
-        // SECURITY: Escape PowerShell special characters to prevent command injection
-        const escapePowerShellPath = (path) => {
-          // Escape backticks, dollar signs, double quotes, and single quotes
-          return path.replace(/[`$"']/g, '`$&');
-        };
-        const escapedPath = escapePowerShellPath(targetDir);
+        // SECURITY: Escape single quotes for literal PowerShell strings
+        const escapePowerShellLiteral = (value) => value.replace(/'/g, "''");
+        const escapedPath = escapePowerShellLiteral(targetDir);
         const cmd = 'cmd.exe';
         const args = ['/c', 'start', '""', 'powershell', '-NoExit', '-Command', `Set-Location -LiteralPath '${escapedPath}'`];
         spawn(cmd, args, { detached: true, windowsHide: false });
@@ -1575,6 +1668,7 @@ function registerIpcHandlers() {
       }
 
       // Linux: try common terminals
+      const escapeForDoubleQuotes = (value) => value.replace(/(["$`\\])/g, '\\$1');
       const trySpawn = (bin, args = []) => new Promise((resolve) => {
         const p = spawn(bin, args, { detached: true });
         p.on('error', () => resolve(false));
@@ -1587,7 +1681,7 @@ function registerIpcHandlers() {
         () => trySpawn('gnome-terminal', ['--working-directory', targetDir]),
         () => trySpawn('konsole', ['--workdir', targetDir]),
         () => trySpawn('xfce4-terminal', ['--working-directory', targetDir]),
-        () => trySpawn('xterm', ['-e', `bash -lc \"cd \"${targetDir}\"; exec bash\"`]),
+        () => trySpawn('xterm', ['-e', 'bash', '-lc', `cd "${escapeForDoubleQuotes(targetDir)}"; exec bash`]),
       ];
 
       for (const attempt of attempts) {
@@ -1615,32 +1709,11 @@ function registerIpcHandlers() {
     }
   });
 
-  // Settings storage
-  const settingsPath = path.join(app.getPath('userData'), 'settings.json');
-  const ensureSettingsDir = async () => {
-    await fsPromises.mkdir(path.dirname(settingsPath), { recursive: true });
-  };
-  const settingsFileExists = async () => {
-    try {
-      await fsPromises.access(settingsPath, fs.constants.F_OK);
-      return true;
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        return false;
-      }
-      throw error;
-    }
-  };
-
   // Load settings
   ipcMain.handle('settings:load', async () => {
     try {
-      await ensureSettingsDir();
-      if (!(await settingsFileExists())) {
-        return { settings: {} };
-      }
-      const data = await fsPromises.readFile(settingsPath, 'utf8');
-      const settings = JSON.parse(data);
+      const settings = await readSettingsFileAsync();
+      updateSettingsCache(settings);
       return { settings };
     } catch (error) {
       reportError('failed to load settings', error);
@@ -1651,8 +1724,8 @@ function registerIpcHandlers() {
   // Save settings
   ipcMain.handle('settings:save', async (_event, { settings }) => {
     try {
-      await ensureSettingsDir();
-      await fsPromises.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+      await writeSettingsFileAsync(settings);
+      updateSettingsCache(settings);
       return { success: true };
     } catch (error) {
       reportError('failed to save settings', error);
@@ -1803,7 +1876,20 @@ function registerIpcHandlers() {
     if (isDev) {
       return;
     }
-    autoUpdater.quitAndInstall();
+
+    // Close all windows first to ensure clean quit
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (!win.isDestroyed()) {
+        win.destroy();
+      }
+    });
+
+    // Force quit and install with parameters:
+    // - isSilent: false (show installer)
+    // - isForceRunAfter: true (force the app to restart after installation)
+    setTimeout(() => {
+      autoUpdater.quitAndInstall(false, true);
+    }, 0);
   });
 
   ipcMain.handle('updater:getVersion', () => {

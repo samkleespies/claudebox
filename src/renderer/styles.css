@@ -15,6 +15,7 @@
   --text-secondary: #888888;
   --success: #22c55e;
   --danger: #ef4444;
+  --sidebar-resizer-width: 1px;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
@@ -86,8 +87,8 @@ select,
 }
 
 .sidebar.hidden {
-  /* Slide out visually */
-  transform: translateX(calc(-1 * var(--sidebar-width, 300px)));
+  /* Slide fully off-screen (with a tiny safety buffer) so it never overlaps the workspace */
+  transform: translateX(calc(-1 * (var(--sidebar-width, 300px) + var(--sidebar-resizer-width, 1px) + 4px)));
   opacity: 0;
   pointer-events: none;
   border-right: none;
@@ -931,7 +932,7 @@ select,
   left: var(--sidebar-visible-width, 300px);
   top: 0;
   height: 100%;
-  width: 1px;
+  width: var(--sidebar-resizer-width, 1px);
   background: var(--sidebar-border);
   cursor: ew-resize;
   z-index: 11;
@@ -959,6 +960,7 @@ select,
 }
 
 .sidebar-resizer.resizing {
+  transition: none;
   background: rgba(255, 107, 53, 0.6);
   box-shadow: -1px 0 0 0 rgba(255, 107, 53, 0.6),
               1px 0 0 0 rgba(255, 107, 53, 0.6);
@@ -1288,8 +1290,12 @@ select,
   min-width: 0;
   position: relative;
   overflow: hidden;
-  margin-left: var(--sidebar-visible-width, 300px);
+  margin-left: calc(var(--sidebar-visible-width, 300px) + var(--sidebar-resizer-width, 1px));
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.workspace.resizing {
+  transition: none;
 }
 
 .workspace.sidebar-hidden {
@@ -1341,6 +1347,21 @@ select,
   display: flex;
   min-width: 0;
   min-height: 0;
+}
+
+.workspace.sidebar-hidden .workspace__terminal {
+  padding-left: 1px;
+}
+
+.workspace.sidebar-hidden .workspace__terminal::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--sidebar-border);
+  pointer-events: none;
 }
 
 .terminal-host {
@@ -2026,6 +2047,123 @@ body.debug-mode .xterm .xterm-screen {
 .btn--secondary:hover {
   background: #1f1f1f;
   border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* ========== NOTIFICATION DIALOG ========== */
+
+.notification-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
+}
+
+.notification-dialog.hidden {
+  display: none;
+}
+
+.notification-dialog__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.notification-dialog__content {
+  position: relative;
+  background: #0d0d0d;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  min-width: 350px;
+  max-width: 500px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: slideInDown 0.2s ease;
+}
+
+.notification-dialog__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 107, 53, 0.15);
+  border: 1px solid rgba(255, 107, 53, 0.3);
+}
+
+.notification-dialog__icon svg {
+  color: var(--accent-claude);
+}
+
+.notification-dialog__icon.success {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.notification-dialog__icon.success svg {
+  color: var(--success);
+}
+
+.notification-dialog__icon.error {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.notification-dialog__icon.error svg {
+  color: var(--danger);
+}
+
+.notification-dialog__icon.warning {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.3);
+}
+
+.notification-dialog__icon.warning svg {
+  color: #eab308;
+}
+
+.notification-dialog__message {
+  text-align: center;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0 8px;
+}
+
+.notification-dialog__buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ========== UPDATE NOTIFICATION TOAST ========== */

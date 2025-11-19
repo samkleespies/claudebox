@@ -42,6 +42,101 @@ function renderFatalError(message) {
   }
 }
 
+// Custom notification dialog functions
+function showNotification(message, type = 'info', buttons = [{ text: 'OK', primary: true }]) {
+  return new Promise((resolve) => {
+    const dialog = document.getElementById('notificationDialog');
+    const messageEl = document.getElementById('notificationMessage');
+    const iconEl = document.getElementById('notificationIcon');
+    const iconContainer = iconEl.parentElement;
+    const buttonsContainer = document.getElementById('notificationButtons');
+
+    // Set message
+    messageEl.textContent = message;
+
+    // Cleanup function to remove event listeners
+    let cleanup = null;
+
+    // Set icon based on type
+    iconContainer.className = 'notification-dialog__icon';
+    if (type === 'success') {
+      iconContainer.classList.add('success');
+      iconEl.innerHTML = '<circle cx="12" cy="12" r="10"></circle><path d="M9 12l2 2 4-4"></path>';
+    } else if (type === 'error') {
+      iconContainer.classList.add('error');
+      iconEl.innerHTML = '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>';
+    } else if (type === 'warning') {
+      iconContainer.classList.add('warning');
+      iconEl.innerHTML = '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>';
+    } else {
+      // info
+      iconEl.innerHTML = '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>';
+    }
+
+    // Create buttons
+    buttonsContainer.innerHTML = '';
+    buttons.forEach((button, index) => {
+      const btn = document.createElement('button');
+      btn.className = button.primary ? 'btn btn--primary' : 'btn btn--secondary';
+      btn.textContent = button.text;
+      btn.onclick = () => {
+        dialog.classList.add('hidden');
+        if (cleanup) cleanup();
+        resolve(index);
+      };
+      buttonsContainer.appendChild(btn);
+    });
+
+    // Keyboard support
+    const handleKeydown = (e) => {
+      if (e.key === 'Escape') {
+        dialog.classList.add('hidden');
+        cleanup();
+        resolve(-1);
+      } else if (e.key === 'Enter') {
+        const primaryBtn = buttonsContainer.querySelector('.btn--primary');
+        if (primaryBtn) {
+          primaryBtn.click();
+        }
+      }
+    };
+
+    cleanup = () => {
+      document.removeEventListener('keydown', handleKeydown);
+    };
+
+    // Show dialog
+    dialog.classList.remove('hidden');
+
+    // Close on overlay click
+    const overlay = dialog.querySelector('.notification-dialog__overlay');
+    overlay.onclick = () => {
+      dialog.classList.add('hidden');
+      cleanup();
+      resolve(-1);
+    };
+
+    document.addEventListener('keydown', handleKeydown);
+
+    // Focus first button
+    setTimeout(() => {
+      const firstBtn = buttonsContainer.querySelector('button');
+      if (firstBtn) firstBtn.focus();
+    }, 100);
+  });
+}
+
+function showAlert(message, type = 'info') {
+  return showNotification(message, type, [{ text: 'OK', primary: true }]);
+}
+
+function showConfirm(message, type = 'warning') {
+  return showNotification(message, type, [
+    { text: 'Cancel', primary: false },
+    { text: 'OK', primary: true }
+  ]).then(index => index === 1);
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   let api;
   try {
@@ -98,6 +193,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     emptyStateEl: document.getElementById('emptyState'),
     sidebar: document.querySelector('.sidebar'),
     sidebarResizer: document.getElementById('sidebarResizer'),
+    workspace: document.querySelector('.workspace'),
     sidebarToggle: document.getElementById('sidebarToggle'),
     sidebarToggleWorkspace: document.getElementById('sidebarToggleWorkspace'),
     settingsBtn: document.getElementById('settingsBtn'),
@@ -186,6 +282,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   };
 
   const disposerFns = [];
+  let branchInfoRequestId = 0;
 
   const findSession = (id) => state.sessions.find((session) => session.id === id);
 
@@ -199,22 +296,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function setActionButtonsDisabled(disabled, exceptButton = null) {
-    if (exceptButton !== elements.newClaudeButton) {
-      elements.newClaudeButton.disabled = disabled;
-    }
-    if (exceptButton !== elements.newCodexButton) {
-      elements.newCodexButton.disabled = disabled;
-    }
-    if (exceptButton !== elements.newOpenCodeButton) {
-      elements.newOpenCodeButton.disabled = disabled;
-    }
-    if (exceptButton !== elements.newGeminiButton) {
-      elements.newGeminiButton.disabled = disabled;
-    }
-    if (exceptButton !== elements.newTerminalButton) {
-      elements.newTerminalButton.disabled = disabled;
-    }
+  function setActionButtonsDisabled(disabled) {
+    elements.newClaudeButton.disabled = disabled;
+    elements.newCodexButton.disabled = disabled;
+    elements.newOpenCodeButton.disabled = disabled;
+    elements.newGeminiButton.disabled = disabled;
+    elements.newTerminalButton.disabled = disabled;
+  }
+
+  function setResizerWidth(widthPx) {
+    const clamped = Math.max(0, Math.round(widthPx));
+    const widthValue = `${clamped}px`;
+    elements.sidebarResizer.style.width = widthValue;
+    document.documentElement.style.setProperty('--sidebar-resizer-width', widthValue);
   }
 
   function renderSessionList() {
@@ -276,7 +370,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         const measureText = (text) => {
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
-          context.font = getComputedStyle(input).font;
+          context.font = window.getComputedStyle(input).font;
           return Math.ceil(context.measureText(text || 'a').width);
         };
 
@@ -448,48 +542,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     window.requestAnimationFrame(() => {
       fitPending = false;
       try {
-        // Debug: Log terminal dimensions before fit
-        const terminalEl = elements.terminalHostEl.querySelector('.xterm');
-        const viewportEl = elements.terminalHostEl.querySelector('.xterm-viewport');
-        const screenEl = elements.terminalHostEl.querySelector('.xterm-screen');
-
-        console.log('[DEBUG] Before fit:', {
-          terminalHost: {
-            width: elements.terminalHostEl.offsetWidth,
-            clientWidth: elements.terminalHostEl.clientWidth,
-            scrollWidth: elements.terminalHostEl.scrollWidth
-          },
-          xterm: terminalEl ? {
-            width: terminalEl.offsetWidth,
-            clientWidth: terminalEl.clientWidth,
-            scrollWidth: terminalEl.scrollWidth,
-            computedPadding: window.getComputedStyle(terminalEl).padding
-          } : null,
-          viewport: viewportEl ? {
-            width: viewportEl.offsetWidth,
-            scrollLeft: viewportEl.scrollLeft
-          } : null,
-          screen: screenEl ? {
-            width: screenEl.offsetWidth,
-            transform: window.getComputedStyle(screenEl).transform
-          } : null,
-          cols: terminal.cols,
-          rows: terminal.rows
-        });
-
         fitAddon.fit();
-
-        // Debug: Log after fit
-        console.log('[DEBUG] After fit:', {
-          cols: terminal.cols,
-          rows: terminal.rows,
-          viewport: viewportEl ? {
-            width: viewportEl.offsetWidth,
-            scrollLeft: viewportEl.scrollLeft
-          } : null
-        });
       } catch (error) {
-        console.error('[DEBUG] Fit error:', error);
+        console.error('[renderer] Fit error:', error);
       }
 
       const activeId = state.activeSessionId;
@@ -900,7 +955,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function handleCreateSession(type, buttonElement) {
-    setActionButtonsDisabled(true, buttonElement);
+    setActionButtonsDisabled(true);
 
     try {
       const cwd = elements.sessionDirInput.value.trim() || undefined;
@@ -913,7 +968,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         // Show dialog to get branch name
         const { getBranchNameDialog } = window.claudebox || {};
         if (!getBranchNameDialog) {
-          alert('Branch name dialog not available');
+          await showAlert('Branch name dialog not available', 'error');
           setActionButtonsDisabled(false);
           return;
         }
@@ -955,7 +1010,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         // Extract the TOOL_NOT_INSTALLED part from the error message
         const toolNotInstalledMatch = message.match(/TOOL_NOT_INSTALLED:([^:]+):(.+?)(?:\s|$)/);
         if (!toolNotInstalledMatch) {
-          alert(`Could not start the session. ${message}`);
+          await showAlert(`Could not start the session. ${message}`, 'error');
           setActionButtonsDisabled(false);
           return;
         }
@@ -969,12 +1024,12 @@ window.addEventListener('DOMContentLoaded', async () => {
             try {
               const result = await installTool(toolType);
               if (result.success) {
-                alert(`${toolName} has been successfully installed! You can now start a session.`);
+                await showAlert(`${toolName} has been successfully installed! You can now start a session.`, 'success');
               } else {
-                alert(`Failed to install ${toolName}: ${result.error}`);
+                await showAlert(`Failed to install ${toolName}: ${result.error}`, 'error');
               }
             } catch (installError) {
-              alert(`Failed to install ${toolName}: ${installError.message}`);
+              await showAlert(`Failed to install ${toolName}: ${installError.message}`, 'error');
             } finally {
               setActionButtonsDisabled(false);
             }
@@ -986,7 +1041,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         return; // Don't re-enable buttons here, let the dialog handlers do it
       }
 
-      alert(`Could not start the session. ${message}`);
+      await showAlert(`Could not start the session. ${message}`, 'error');
     } finally {
       setActionButtonsDisabled(false);
     }
@@ -1095,6 +1150,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     const cwd = elements.sessionDirInput.value.trim();
+    const requestId = ++branchInfoRequestId;
+    const isCurrent = () =>
+      requestId === branchInfoRequestId &&
+      elements.sessionDirInput.value.trim() === cwd;
 
     // If no directory is selected, disable branch controls
     if (!cwd) {
@@ -1110,6 +1169,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
       // Check if it's a git repo
       const { isRepo } = await gitIsRepo(cwd);
+      if (!isCurrent()) return;
       state.isGitRepo = isRepo;
 
       if (!isRepo) {
@@ -1123,6 +1183,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       // Get current branch
       const { branch } = await gitGetCurrentBranch(cwd);
+      if (!isCurrent()) return;
       state.currentBranch = branch;
       elements.branchName.textContent = branch || 'Unknown';
       elements.branchSelector.disabled = false;
@@ -1130,22 +1191,33 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       // Get all branches
       const { branches } = await gitGetAllBranches(cwd);
+      if (!isCurrent()) return;
       state.availableBranches = branches || [];
 
       // Update branch dropdown
-      renderBranchList();
+      await renderBranchList(cwd, requestId);
     } catch (error) {
-      console.error('[renderer] Failed to update branch info', error);
-      elements.branchName.textContent = 'Error';
-      elements.branchSelector.disabled = true;
-      elements.worktreeModeToggle.disabled = true;
+      if (isCurrent()) {
+        console.error('[renderer] Failed to update branch info', error);
+        elements.branchName.textContent = 'Error';
+        elements.branchSelector.disabled = true;
+        elements.worktreeModeToggle.disabled = true;
+      }
     }
   }
 
   /**
    * Render the branch list in the dropdown
    */
-  async function renderBranchList() {
+  async function renderBranchList(currentCwd, requestId = branchInfoRequestId) {
+    const isCurrent = () =>
+      requestId === branchInfoRequestId &&
+      (!currentCwd || elements.sessionDirInput.value.trim() === currentCwd);
+
+    if (!isCurrent()) {
+      return;
+    }
+
     elements.branchList.innerHTML = '';
 
     if (state.availableBranches.length === 0) {
@@ -1159,21 +1231,30 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     const { gitListWorktrees } = window.claudebox || {};
-    const cwd = elements.sessionDirInput.value.trim() || undefined;
+    const cwd = currentCwd || elements.sessionDirInput.value.trim() || undefined;
 
     // Get list of branches in worktrees
     let worktreeBranches = new Set();
     if (gitListWorktrees) {
       try {
         const { worktrees } = await gitListWorktrees(cwd);
+        if (!isCurrent()) {
+          return;
+        }
         worktrees.forEach(wt => {
           if (wt.branch) {
             worktreeBranches.add(wt.branch);
           }
         });
       } catch (error) {
-        console.error('[renderer] Failed to list worktrees', error);
+        if (isCurrent()) {
+          console.error('[renderer] Failed to list worktrees', error);
+        }
       }
+    }
+
+    if (!isCurrent()) {
+      return;
     }
 
     state.availableBranches.forEach(branch => {
@@ -1293,11 +1374,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         closeBranchDropdown();
         await updateBranchInfo();
       } else {
-        alert(`Failed to checkout branch: ${error}`);
+        await showAlert(`Failed to checkout branch: ${error}`, 'error');
       }
     } catch (error) {
       console.error('[renderer] Failed to checkout branch', error);
-      alert(`Error: ${error.message}`);
+      await showAlert(`Error: ${error.message}`, 'error');
     }
   }
 
@@ -1318,9 +1399,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     elements.branchDropdown.classList.remove('hidden');
     elements.branchSelector.classList.add('open');
     elements.newBranchInput.value = '';
-
-    // Close quick prompts dropdown if open
-    closeQuickPromptsDropdown();
   }
 
   function closeBranchDropdown() {
@@ -1340,7 +1418,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const branchName = elements.newBranchInput.value.trim();
 
     if (!branchName) {
-      alert('Please enter a branch name');
+      await showAlert('Please enter a branch name', 'warning');
       return;
     }
 
@@ -1361,11 +1439,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         await updateBranchInfo();
         closeBranchDropdown();
       } else {
-        alert(`Failed to create branch: ${error}`);
+        await showAlert(`Failed to create branch: ${error}`, 'error');
       }
     } catch (error) {
       console.error('[renderer] Failed to create branch', error);
-      alert(`Error: ${error.message}`);
+      await showAlert(`Error: ${error.message}`, 'error');
     }
   });
 
@@ -1504,6 +1582,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       const { settings } = await loadSettings();
       currentSettings = { ...defaultSettings, ...settings };
       applySettingsToForm();
+      applySettings();
     } catch (error) {
       console.error('[renderer] Failed to load settings', error);
     }
@@ -1521,6 +1600,37 @@ window.addEventListener('DOMContentLoaded', async () => {
         input.value = currentSettings[key];
       }
     });
+  }
+
+  // Apply settings to terminal and UI
+  function applySettings() {
+    // Apply terminal settings
+    if (terminal && currentSettings) {
+      terminal.options.fontFamily = currentSettings.terminalFontFamily || defaultSettings.terminalFontFamily;
+      terminal.options.fontSize = currentSettings.terminalFontSize || defaultSettings.terminalFontSize;
+      terminal.options.fontWeight = currentSettings.terminalFontWeight || defaultSettings.terminalFontWeight;
+      terminal.options.fontWeightBold = currentSettings.terminalFontWeightBold || defaultSettings.terminalFontWeightBold;
+      terminal.options.cursorStyle = currentSettings.terminalCursorStyle || defaultSettings.terminalCursorStyle;
+      terminal.options.cursorBlink = currentSettings.terminalCursorBlink !== undefined ? currentSettings.terminalCursorBlink : defaultSettings.terminalCursorBlink;
+      terminal.options.scrollback = currentSettings.terminalScrollback || defaultSettings.terminalScrollback;
+
+      // Apply terminal colors
+      terminal.options.theme = {
+        ...terminal.options.theme,
+        background: currentSettings.terminalBgColor || defaultSettings.terminalBgColor,
+        foreground: currentSettings.terminalFgColor || defaultSettings.terminalFgColor,
+        cursor: currentSettings.terminalCursorColor || defaultSettings.terminalCursorColor,
+      };
+
+      // Trigger a refresh of the terminal to apply changes
+      terminal.refresh(0, terminal.rows - 1);
+      fitAndNotify();
+    }
+
+    // Apply sidebar width if setting exists
+    if (currentSettings.sidebarWidth) {
+      setSidebarWidth(currentSettings.sidebarWidth, true);
+    }
   }
 
   // Gather settings from form
@@ -1553,20 +1663,22 @@ window.addEventListener('DOMContentLoaded', async () => {
       const result = await saveSettings(currentSettings);
 
       if (result.success) {
-        alert('Settings saved successfully! Some settings may require a restart to take effect.');
+        applySettings();
+        await showAlert('Settings saved successfully! Terminal settings have been applied.', 'success');
         closeSettingsModal();
       } else {
-        alert('Failed to save settings: ' + (result.error || 'Unknown error'));
+        await showAlert('Failed to save settings: ' + (result.error || 'Unknown error'), 'error');
       }
     } catch (error) {
       console.error('[renderer] Failed to save settings', error);
-      alert('Failed to save settings: ' + error.message);
+      await showAlert('Failed to save settings: ' + error.message, 'error');
     }
   }
 
   // Reset to defaults
-  function resetSettings() {
-    if (confirm('Are you sure you want to reset all settings to defaults?')) {
+  async function resetSettings() {
+    const confirmed = await showConfirm('Are you sure you want to reset all settings to defaults?');
+    if (confirmed) {
       currentSettings = { ...defaultSettings };
       applySettingsToForm();
     }
@@ -1686,7 +1798,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (onUpdateError) {
     disposerFns.push(onUpdateError(({ message }) => {
       console.error('[renderer] Update error:', message);
-      alert(`Update error: ${message}`);
+      showAlert(`Update error: ${message}`, 'error');
       hideUpdateNotification();
     }));
   }
@@ -1703,7 +1815,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         await installUpdate();
       } catch (error) {
         console.error('[renderer] Failed to install update', error);
-        alert(`Failed to install update: ${error.message}`);
+        await showAlert(`Failed to install update: ${error.message}`, 'error');
         setDownloadButtonState(UpdateAction.INSTALL);
       }
       return;
@@ -1718,7 +1830,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       await downloadUpdate();
     } catch (error) {
       console.error('[renderer] Failed to download update', error);
-      alert(`Failed to download update: ${error.message}`);
+      await showAlert(`Failed to download update: ${error.message}`, 'error');
       setDownloadButtonState(UpdateAction.DOWNLOAD);
     }
   });
@@ -1738,30 +1850,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     const currentlyHidden = elements.sidebar.classList.contains('hidden');
 
-    // Debug: Check sidebar and workspace positions before toggle
-    const workspaceEl = document.querySelector('.workspace');
-    const workspaceRect = workspaceEl?.getBoundingClientRect();
-    const canvasEl = elements.terminalHostEl.querySelector('canvas');
-
-    console.log('[DEBUG] Before toggle:', {
-      sidebar: {
-        left: sidebarRect.left,
-        right: sidebarRect.right,
-        width: sidebarRect.width,
-        computedWidth: window.getComputedStyle(elements.sidebar).width,
-        transform: window.getComputedStyle(elements.sidebar).transform,
-        hidden: elements.sidebar.classList.contains('hidden')
-      },
-      workspace: workspaceRect ? {
-        left: workspaceRect.left,
-        width: workspaceRect.width
-      } : null,
-      canvas: canvasEl ? {
-        left: canvasEl.getBoundingClientRect().left,
-        offsetLeft: canvasEl.offsetLeft
-      } : null
-    });
-
     const afterTransition = (el, fn, timeout = 350) => {
       let called = false;
       const handler = (ev) => {
@@ -1770,39 +1858,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         if (called) return;
         called = true;
         el.removeEventListener('transitionend', handler);
-
-        // Debug: Check positions after transition
-        const sidebarRectAfter = elements.sidebar.getBoundingClientRect();
-        const workspaceElAfter = document.querySelector('.workspace');
-        const workspaceRectAfter = workspaceElAfter?.getBoundingClientRect();
-        const canvasElAfter = elements.terminalHostEl.querySelector('canvas');
-        const resizerEl = document.querySelector('.sidebar-resizer');
-        const resizerRect = resizerEl?.getBoundingClientRect();
-
-        console.log('[DEBUG] After toggle transition:', {
-          sidebar: {
-            left: sidebarRectAfter.left,
-            right: sidebarRectAfter.right,
-            width: sidebarRectAfter.width,
-            computedWidth: window.getComputedStyle(elements.sidebar).width,
-            transform: window.getComputedStyle(elements.sidebar).transform,
-            hidden: elements.sidebar.classList.contains('hidden')
-          },
-          resizer: resizerRect ? {
-            left: resizerRect.left,
-            width: resizerRect.width,
-            computedWidth: window.getComputedStyle(resizerEl).width
-          } : null,
-          workspace: workspaceRectAfter ? {
-            left: workspaceRectAfter.left,
-            width: workspaceRectAfter.width
-          } : null,
-          canvas: canvasElAfter ? {
-            left: canvasElAfter.getBoundingClientRect().left,
-            offsetLeft: canvasElAfter.offsetLeft
-          } : null
-        });
-
         fn();
       };
       el.addEventListener('transitionend', handler);
@@ -1815,13 +1870,14 @@ window.addEventListener('DOMContentLoaded', async () => {
       }, timeout);
     };
 
-    const workspaceElement = document.querySelector('.workspace');
-
     if (!currentlyHidden) {
       // Hiding: collapse width smoothly via CSS; resizer auto collapses via CSS rule
       elements.sidebar.classList.add('hidden');
-      if (workspaceElement) workspaceElement.classList.add('sidebar-hidden');
+      if (elements.workspace) elements.workspace.classList.add('sidebar-hidden');
+      setResizerWidth(0);
+      elements.sidebarResizer.style.flexBasis = '0';
       afterTransition(elements.sidebar, () => {
+        elements.sidebar.style.visibility = 'hidden';
         // Show floating workspace toggle
         elements.sidebarToggleWorkspace.style.display = 'flex';
         elements.sidebarToggleWorkspace.offsetHeight; // reflow
@@ -1829,6 +1885,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         fitAndNotify();
       });
     } else {
+      elements.sidebar.style.visibility = 'visible';
+      setResizerWidth(1);
+      elements.sidebarResizer.style.flexBasis = '';
       // Showing: when the floating restore button is clicked, animate it out
       // in reverse while the sidebar slides back in.
       const btn = elements.sidebarToggleWorkspace;
@@ -1846,7 +1905,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       // Slide the sidebar back in
       elements.sidebar.classList.remove('hidden');
-      if (workspaceElement) workspaceElement.classList.remove('sidebar-hidden');
+      if (elements.workspace) elements.workspace.classList.remove('sidebar-hidden');
       afterTransition(elements.sidebar, () => {
         fitAndNotify();
       });
@@ -1867,6 +1926,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Set initial sidebar width CSS variable
   document.documentElement.style.setProperty('--sidebar-visible-width', `${preferredSidebarWidth}px`);
+  setResizerWidth(elements.sidebarResizer.offsetWidth || 1);
 
   // Helper function to update ASCII logo font size based on sidebar width
   function updateAsciiLogoSize(width) {
@@ -1914,6 +1974,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     elements.sidebarResizer.classList.add('resizing');
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
+    elements.workspace?.classList.add('resizing');
   });
 
   document.addEventListener('mousemove', (e) => {
@@ -1934,6 +1995,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       elements.sidebarResizer.classList.remove('resizing');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      elements.workspace?.classList.remove('resizing');
     }
   });
 
@@ -1941,7 +2003,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Immediate updates (fit is rAF-coalesced) for snappy behavior
   window.addEventListener('resize', () => {
     if (elements.sidebar.classList.contains('hidden')) {
-      elements.sidebarResizer.style.width = '0px';
+      setResizerWidth(0);
       elements.sidebarResizer.style.flexBasis = '0';
       return;
     }
@@ -1949,14 +2011,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     const windowWidth = window.innerWidth;
     const collapseResizer = windowWidth <= MIN_SIDEBAR_WIDTH + 1;
     if (collapseResizer) {
-      elements.sidebarResizer.style.width = '0px';
+      setResizerWidth(0);
       elements.sidebarResizer.style.flexBasis = '0';
       setSidebarWidth(MIN_SIDEBAR_WIDTH, true);
       return;
     }
 
     // Normal case: keep resizer visible and set width to the min of preferred and available space
-    elements.sidebarResizer.style.width = '1px';
+    setResizerWidth(1);
     elements.sidebarResizer.style.flexBasis = '';
 
     const resizerWidth = elements.sidebarResizer.offsetWidth || 1;
@@ -2073,4 +2135,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Initialize ASCII animation on load
   initializeASCIIAnimation();
+
+  // Load and apply saved settings on startup
+  loadSettings();
 });
