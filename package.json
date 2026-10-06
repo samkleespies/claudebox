@@ -32,8 +32,8 @@
     "electron-updater": "^6.6.2"
   },
   "devDependencies": {
-    "electron": "^27.3.11",
-    "electron-builder": "^26.0.12",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^4.0.1",
     "eslint": "^9.17.0",
     "vite": "^7.1.9"
@@ -136,5 +136,8 @@
       "icon": "src/renderer/assets/images/app-icon.png",
       "artifactName": "claudebox-${version}-linux.${ext}"
     }
+  },
+  "overrides": {
+    "global-agent": "^4.1.3"
   }
 }
