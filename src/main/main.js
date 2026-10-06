@@ -782,7 +782,7 @@ async function checkToolInstalled(type, skipCache = false) {
 
       // Cache the result
       toolInstallCache.set(type, isInstalled);
-      log(`Checked ${type} installation: ${isInstalled} (PATH: ${env.PATH.substring(0, 100)}...)`);
+      log(`Checked ${type} installation: ${isInstalled}`);
 
       resolve(isInstalled);
     });
@@ -1469,8 +1469,8 @@ function registerIpcHandlers() {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false,
-        // Disable web security to allow inline scripts in data URLs
-        webSecurity: false
+        // Keep Chromium origin and CORS protections enabled for the local dialog.
+        webSecurity: true
       }
     });
 
